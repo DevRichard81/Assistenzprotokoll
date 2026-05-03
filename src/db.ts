@@ -18,9 +18,18 @@ export interface DailyLog {
   date: string; // ISO format YYYY-MM-DD
   foerderziel: string;
   assistenzinhalt: string;
+  anmerkungReflexion: string;
   startTime: string; // hh:mm
   endTime: string;   // hh:mm
   timeWithCustomerMinutes: number;
+  anabfhart_from: string;
+  anabfhart_too: string;
+  traveltime: number;
+  km: number;
+  customer_anabfhart_from: string;
+  customer_anabfhart_too: string;
+  coustomer_traveltime: number;
+  couistomer_km: number;
 }
 
 export interface ChangeLog {
@@ -64,37 +73,37 @@ export interface Template {
   tableY: number;
 }
 
+export interface PDFTemplate {
+  id?: number;
+  name: string;
+  pdfBase64: string; // The base PDF file
+  fieldMappings: {
+    placeholder: string; // e.g. "{{month}}"
+    dataSource: string;  // e.g. "month", "year", "customer.kunde", etc.
+  }[];
+  detectedFields?: string[]; // Field names found during scan
+  tableY: number; // Where to start the daily logs table
+  tableSettings?: any;
+}
+
 const db = new Dexie('TanyaFillOutDB') as Dexie & {
   customers: EntityTable<Customer, 'id'>;
   logs: EntityTable<DailyLog, 'id'>;
   auditTrail: EntityTable<ChangeLog, 'id'>;
   settings: EntityTable<Setting, 'key'>;
   templates: EntityTable<Template, 'id'>;
+  pdfTemplates: EntityTable<PDFTemplate, 'id'>;
 };
 
-db.version(8).stores({
+db.version(11).stores({
   customers: '++id, kunde',
   logs: '++id, customerId, date',
   auditTrail: '++id, entityType, entityId, timestamp',
   settings: 'key',
-  templates: '++id, name'
+  templates: '++id, name',
+  pdfTemplates: '++id, name'
 }).upgrade(tx => {
-  // Version 7: Convert number[] colors to string hex
-  tx.table('templates').toCollection().modify(template => {
-    if (Array.isArray(template.primaryColor)) {
-      template.primaryColor = rgbToHex(template.primaryColor[0], template.primaryColor[1], template.primaryColor[2]);
-    }
-    if (template.fields) {
-      template.fields.forEach((f: any) => {
-        if (Array.isArray(f.color)) {
-          f.color = rgbToHex(f.color[0], f.color[1], f.color[2]);
-        }
-        if (f.zOrder === undefined) {
-          f.zOrder = 0;
-        }
-      });
-    }
-  });
+  // Migration logic if needed
 });
 
 function rgbToHex(r: number, g: number, b: number) {

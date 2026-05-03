@@ -16,6 +16,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^1.14.0",
+    "pdf-lib": "^1.17.1",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
