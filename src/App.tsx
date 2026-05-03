@@ -329,7 +329,11 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     const defaultFontSize = template?.fontSize || 8;
 
     if (template?.fields) {
-      template.fields.filter(f => f.visible).forEach(field => {
+      const sortedFields = [...template.fields]
+        .filter(f => f.visible)
+        .sort((a, b) => (a.zOrder || 0) - (b.zOrder || 0));
+
+      sortedFields.forEach(field => {
         const fieldFontSize = field.fontSize || defaultFontSize;
         const fieldFontStyle = field.fontStyle || 'normal';
         const fieldColor = field.color || '#000000';
@@ -370,7 +374,8 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
           if (field.id === 'title') {
              doc.text(value, field.x, field.y, { align: 'center' });
           } else {
-             doc.text(field.type === 'static' ? value : `${field.label}: ${value}`, field.x, field.y);
+             const label = field.label ? field.label : '';
+             doc.text(field.type === 'static' ? value : `${label}${value}`, field.x, field.y);
           }
         }
       });
@@ -978,16 +983,16 @@ function TemplatesView() {
   const [editingId, setEditingId] = useState<number | null>(null);
   
   const initialFields: TemplateField[] = [
-    { id: 'title', label: 'Protokoll Titel', x: 105, y: 20, visible: true, type: 'static', content: 'ASSISTENZPROTOKOLL', fontSize: 18, fontStyle: 'bold', color: '#000000', width: 210 },
-    { id: 'dienstleistung', label: 'Dienstleistung', x: 14, y: 30, visible: true, type: 'data', color: '#000000' },
-    { id: 'kunde', label: 'Kunde', x: 14, y: 35, visible: true, type: 'data', color: '#000000' },
-    { id: 'assistent', label: 'Assistent', x: 14, y: 40, visible: true, type: 'data', color: '#000000' },
-    { id: 'adresse', label: 'Adresse', x: 14, y: 45, visible: true, type: 'data', color: '#000000' },
-    { id: 'anfahrtFrom', label: 'Anfahrt von', x: 14, y: 50, visible: false, type: 'data', color: '#000000' },
-    { id: 'abfahrtTo', label: 'Abfahrt zu', x: 14, y: 55, visible: false, type: 'data', color: '#000000' },
-    { id: 'driveTimeMinutes', label: 'Fahrtzeit', x: 14, y: 60, visible: false, type: 'data', color: '#000000' },
-    { id: 'km', label: 'Kilometer', x: 14, y: 65, visible: false, type: 'data', color: '#000000' },
-    { id: 'month', label: 'Monat', x: 14, y: 70, visible: true, type: 'data', color: '#000000' },
+    { id: 'title', label: 'Protokoll Titel', x: 105, y: 20, visible: true, type: 'static', content: 'ASSISTENZPROTOKOLL', fontSize: 18, fontStyle: 'bold', color: '#000000', width: 210, zOrder: 0 },
+    { id: 'dienstleistung', label: 'Dienstleistung: ', x: 14, y: 30, visible: true, type: 'data', color: '#000000', zOrder: 1 },
+    { id: 'kunde', label: 'Kunde: ', x: 14, y: 35, visible: true, type: 'data', color: '#000000', zOrder: 2 },
+    { id: 'assistent', label: 'Assistent: ', x: 14, y: 40, visible: true, type: 'data', color: '#000000', zOrder: 3 },
+    { id: 'adresse', label: 'Adresse: ', x: 14, y: 45, visible: true, type: 'data', color: '#000000', zOrder: 4 },
+    { id: 'anfahrtFrom', label: 'Anfahrt von: ', x: 14, y: 50, visible: false, type: 'data', color: '#000000', zOrder: 5 },
+    { id: 'abfahrtTo', label: 'Abfahrt zu: ', x: 14, y: 55, visible: false, type: 'data', color: '#000000', zOrder: 6 },
+    { id: 'driveTimeMinutes', label: 'Fahrtzeit: ', x: 14, y: 60, visible: false, type: 'data', color: '#000000', zOrder: 7 },
+    { id: 'km', label: 'Kilometer: ', x: 14, y: 65, visible: false, type: 'data', color: '#000000', zOrder: 8 },
+    { id: 'month', label: 'Monat: ', x: 14, y: 70, visible: true, type: 'data', color: '#000000', zOrder: 9 },
   ];
 
   const [formData, setFormData] = useState<Partial<Template>>({
@@ -1042,6 +1047,7 @@ function TemplatesView() {
       color: '#000000',
       width: type === 'image' ? 30 : undefined,
       height: type === 'image' ? 30 : undefined,
+      zOrder: (formData.fields?.length || 0) + 10,
     };
     setFormData(prev => ({
       ...prev,
@@ -1097,6 +1103,8 @@ function TemplatesView() {
                       <input type="number" className="w-12 border rounded p-1 text-xs bg-white text-gray-900" value={field.x} onChange={e => updateField(field.id, { x: Number(e.target.value) })} />
                       <span className="text-xs text-gray-500">Y:</span>
                       <input type="number" className="w-12 border rounded p-1 text-xs bg-white text-gray-900" value={field.y} onChange={e => updateField(field.id, { y: Number(e.target.value) })} />
+                      <span className="text-xs text-gray-500">Z:</span>
+                      <input type="number" className="w-12 border rounded p-1 text-xs bg-white text-gray-900" value={field.zOrder || 0} onChange={e => updateField(field.id, { zOrder: Number(e.target.value) })} />
                       {field.id.includes('_') && <button onClick={() => removeField(field.id)} className="text-red-500 p-1"><Trash2 size={14} /></button>}
                     </div>
                   </div>
@@ -1213,6 +1221,7 @@ function TemplatesView() {
                     height: field.height ? `${(field.height / 297) * 100}%` : 'auto',
                     left: field.id === 'title' ? '50%' : (field.x !== undefined ? `${(field.x / 210) * 100}%` : '0%'),
                     overflow: 'hidden',
+                    zIndex: field.zOrder || 0,
                   }}
                   onMouseDown={() => setDraggedFieldId(field.id)}
                 >
@@ -1220,7 +1229,7 @@ function TemplatesView() {
                     <img src={field.content} className="w-full h-full object-contain" alt="Logo" />
                   ) : (
                     <>
-                      <span className="font-bold">{field.label}:</span> 
+                      {field.label && <span className="font-bold">{field.label}</span>}
                       <span> {field.type === 'static' || field.id === 'title' ? field.content : '[Data]'}</span>
                     </>
                   )}

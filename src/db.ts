@@ -51,6 +51,7 @@ export interface TemplateField {
   fontStyle?: 'normal' | 'bold' | 'italic' | 'bolditalic';
   width?: number;
   height?: number;
+  zOrder?: number;
 }
 
 export interface Template {
@@ -71,7 +72,7 @@ const db = new Dexie('TanyaFillOutDB') as Dexie & {
   templates: EntityTable<Template, 'id'>;
 };
 
-db.version(7).stores({
+db.version(8).stores({
   customers: '++id, kunde',
   logs: '++id, customerId, date',
   auditTrail: '++id, entityType, entityId, timestamp',
@@ -87,6 +88,9 @@ db.version(7).stores({
       template.fields.forEach((f: any) => {
         if (Array.isArray(f.color)) {
           f.color = rgbToHex(f.color[0], f.color[1], f.color[2]);
+        }
+        if (f.zOrder === undefined) {
+          f.zOrder = 0;
         }
       });
     }
