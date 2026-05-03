@@ -1,13 +1,13 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { db, type Customer, type DailyLog } from './db';
+import { db, type Customer, type DailyLog, type Template, type TemplateField } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
-import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settings } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settings, Palette, Move } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // --- Types ---
-type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings';
+type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings' | 'templates';
 
 // --- Helper for Audit Logging ---
 async function logChange(entityType: 'customer' | 'log', entityId: number, action: 'create' | 'update' | 'delete', oldValue?: any, newValue?: any) {
@@ -58,6 +58,63 @@ export default function App() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
 
+  useEffect(() => {
+    // Seed default templates if they don't exist
+    const seedTemplates = async () => {
+      try {
+        const count = await db.templates.count();
+        if (count === 0) {
+          const defaultFields: TemplateField[] = [
+            { id: 'title', label: 'Protokoll Titel', x: 105, y: 20, visible: true, type: 'static', content: 'ASSISTENZPROTOKOLL', fontSize: 18, fontStyle: 'bold' },
+            { id: 'dienstleistung', label: 'Dienstleistung', x: 14, y: 30, visible: true, type: 'data' },
+            { id: 'kunde', label: 'Kunde', x: 14, y: 35, visible: true, type: 'data' },
+            { id: 'assistent', label: 'Assistent', x: 14, y: 40, visible: true, type: 'data' },
+            { id: 'adresse', label: 'Adresse', x: 14, y: 45, visible: true, type: 'data' },
+            { id: 'anfahrtFrom', label: 'Anfahrt von', x: 14, y: 50, visible: false, type: 'data' },
+            { id: 'abfahrtTo', label: 'Abfahrt zu', x: 14, y: 55, visible: false, type: 'data' },
+            { id: 'driveTimeMinutes', label: 'Fahrtzeit', x: 14, y: 60, visible: false, type: 'data' },
+            { id: 'km', label: 'Kilometer', x: 14, y: 65, visible: false, type: 'data' },
+            { id: 'month', label: 'Monat', x: 14, y: 70, visible: true, type: 'data' },
+          ];
+
+          await db.templates.bulkAdd([
+            {
+              name: 'Standard Protocol',
+              title: 'ASSISTENZPROTOKOLL',
+              fields: defaultFields,
+              primaryColor: '#c8c8c8',
+              fontSize: 8,
+              tableY: 80
+            },
+            {
+              name: 'Compact Travel Info',
+              title: 'FAHRTEN-PROTOKOLL',
+              fields: defaultFields.map(f => {
+                if (['anfahrtFrom', 'abfahrtTo', 'driveTimeMinutes', 'km'].includes(f.id)) return { ...f, visible: true };
+                if (['dienstleistung', 'assistent', 'adresse'].includes(f.id)) return { ...f, visible: false };
+                return f;
+              }),
+              primaryColor: '#c8dcff',
+              fontSize: 7,
+              tableY: 80
+            }
+          ]);
+          // Set default template setting
+          const activeTemplate = await db.settings.get('activeTemplateId');
+          if (!activeTemplate) {
+            const first = await db.templates.toCollection().first();
+            if (first) {
+              await db.settings.put({ key: 'activeTemplateId', value: first.id });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to seed templates:", error);
+      }
+    };
+    seedTemplates();
+  }, []);
+
   const customers = useLiveQuery(() => db.customers.toArray());
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
 
@@ -71,6 +128,7 @@ export default function App() {
         <nav className="flex-1 px-4 space-y-2">
           <NavItem icon={<Calendar />} label="Daily Logs" active={activeView === 'logs'} onClick={() => setActiveView('logs')} />
           <NavItem icon={<User />} label="Customers" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
+          <NavItem icon={<Palette />} label="Templates" active={activeView === 'templates'} onClick={() => setActiveView('templates')} />
           <NavItem icon={<BarChart />} label="Statistics" active={activeView === 'stats'} onClick={() => setActiveView('stats')} />
           <NavItem icon={<History />} label="Change Log" active={activeView === 'history'} onClick={() => setActiveView('history')} />
           <NavItem icon={<Settings />} label="Settings" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
@@ -109,6 +167,7 @@ export default function App() {
         {activeView === 'stats' && <StatsView month={selectedMonth} />}
         {activeView === 'history' && <HistoryView />}
         {activeView === 'settings' && <SettingsView />}
+        {activeView === 'templates' && <TemplatesView />}
       </main>
     </div>
   );
@@ -193,9 +252,9 @@ function CustomerView() {
         {customers?.map(c => (
           <div key={c.id} className="bg-white p-4 rounded-xl border shadow-sm flex justify-between items-start">
             <div>
-              <h4 className="font-bold text-gray-800">{c.kunde}</h4>
-              <p className="text-sm text-gray-500">{c.dienstleistung}</p>
-              <p className="text-xs text-gray-400">{c.adresse}</p>
+              <h4 className="font-bold text-gray-900">{c.kunde}</h4>
+              <p className="text-sm text-gray-700">{c.dienstleistung}</p>
+              <p className="text-xs text-gray-500">{c.adresse}</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => {setEditingId(c.id!); setFormData(c);}} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Plus size={18} /></button>
@@ -257,19 +316,82 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     }
   };
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
     if (!customer || !logs) return;
+    
+    // Get active template
+    const activeTemplateSetting = await db.settings.get('activeTemplateId');
+    const templateId = activeTemplateSetting?.value;
+    const template = templateId ? await db.templates.get(templateId) : null;
+    
     const doc = new jsPDF();
-    
-    doc.setFontSize(18);
-    doc.text('ASSISTENZPROTOKOLL', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.text(`Dienstleistung: ${customer.dienstleistung}`, 14, 30);
-    doc.text(`Kunde: ${customer.kunde}`, 14, 35);
-    doc.text(`Assistent: ${customer.assistent}`, 14, 40);
-    doc.text(`Adresse: ${customer.adresse}`, 14, 45);
-    doc.text(`Monat: ${month}`, 14, 50);
+    const primaryColor = template?.primaryColor || '#c8c8c8';
+    const defaultFontSize = template?.fontSize || 8;
+
+    if (template?.fields) {
+      template.fields.filter(f => f.visible).forEach(field => {
+        const fieldFontSize = field.fontSize || defaultFontSize;
+        const fieldFontStyle = field.fontStyle || 'normal';
+        const fieldColor = field.color || '#000000';
+
+        doc.setFontSize(fieldFontSize);
+        doc.setFont('helvetica', fieldFontStyle);
+        doc.setTextColor(fieldColor);
+
+        if (field.type === 'image' && field.content) {
+          try {
+            const w = field.width || 30;
+            const h = field.height || 30;
+            doc.addImage(field.content, 'PNG', field.x, field.y, w, h);
+          } catch (e) {
+            console.error("Failed to add image to PDF", e);
+          }
+        } else {
+          let value = '';
+          if (field.type === 'static') {
+            value = field.content || '';
+          } else {
+            // Data fields
+            switch(field.id) {
+              case 'dienstleistung': value = customer.dienstleistung; break;
+              case 'kunde': value = customer.kunde; break;
+              case 'assistent': value = customer.assistent; break;
+              case 'adresse': value = customer.adresse; break;
+              case 'anfahrtFrom': value = customer.anfahrtFrom; break;
+              case 'abfahrtTo': value = customer.abfahrtTo; break;
+              case 'driveTimeMinutes': value = `${customer.driveTimeMinutes} min`; break;
+              case 'km': value = `${customer.km} km`; break;
+              case 'month': value = month; break;
+              case 'title': value = field.content || template.title || 'ASSISTENZPROTOKOLL'; break;
+              default: value = '';
+            }
+          }
+          
+          if (field.id === 'title') {
+             doc.text(value, field.x, field.y, { align: 'center' });
+          } else {
+             doc.text(field.type === 'static' ? value : `${field.label}: ${value}`, field.x, field.y);
+          }
+        }
+      });
+    } else {
+      // Fallback to legacy
+      doc.setFontSize(18);
+      doc.text(template?.title || 'ASSISTENZPROTOKOLL', 105, 20, { align: 'center' });
+      doc.setFontSize(10);
+      let y = 30;
+      doc.text(`Dienstleistung: ${customer.dienstleistung}`, 14, y); y += 5;
+      doc.text(`Kunde: ${customer.kunde}`, 14, y); y += 5;
+      doc.text(`Assistent: ${customer.assistent}`, 14, y); y += 5;
+      doc.text(`Adresse: ${customer.adresse}`, 14, y); y += 5;
+      doc.text(`Monat: ${month}`, 14, y); y += 10;
+    }
+
+    // Reset styles for table
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+
+    const startY = template?.tableY || 80;
 
     const exportDays = days.filter(d => selectedDayStrings.includes(format(d, 'yyyy-MM-dd')));
 
@@ -292,15 +414,15 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     });
 
     autoTable(doc, {
-      startY: 60,
+      startY: startY,
       head: [['Datum', 'Förderziel', 'Assistenzinhalt', 'Beginn', 'Ende', 'Zeit (min)']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [200, 200, 200], textColor: 0 },
-      styles: { fontSize: 8 }
+      headStyles: { fillColor: primaryColor as any, textColor: 0 },
+      styles: { fontSize: defaultFontSize }
     });
 
-    doc.save(`Protokoll_${customer.kunde}_${month}.pdf`);
+    doc.save(`${template?.title || 'ASSISTENZPROTOKOLL'}_${customer.kunde}_${month}.pdf`);
   };
 
   if (!customerId) return <div className="text-center p-12 bg-white rounded-xl border">Please select a customer to view logs.</div>;
@@ -445,7 +567,7 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
       </td>
-      <td className="p-3 font-medium">{format(day, 'dd.MM (EEE)')}</td>
+      <td className="p-3 font-medium text-gray-900">{format(day, 'dd.MM (EEE)')}</td>
       {isEditing ? (
         <>
           <td className="p-1"><input type="text" className="border rounded p-1 w-full bg-white text-gray-900" value={data.foerderziel || ''} onChange={e => setData({...data, foerderziel: e.target.value})} /></td>
@@ -482,11 +604,11 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
         </>
       ) : (
         <>
-          <td className="p-3 truncate max-w-[150px]">{log?.foerderziel || '-'}</td>
-          <td className="p-3 truncate max-w-[200px]">{log?.assistenzinhalt || '-'}</td>
-          <td className="p-3">{log?.startTime || '-'}</td>
-          <td className="p-3">{log?.endTime || '-'}</td>
-          <td className="p-3">{log?.timeWithCustomerMinutes || 0}m</td>
+          <td className="p-3 truncate max-w-[150px] text-gray-900">{log?.foerderziel || '-'}</td>
+          <td className="p-3 truncate max-w-[200px] text-gray-900">{log?.assistenzinhalt || '-'}</td>
+          <td className="p-3 text-gray-900">{log?.startTime || '-'}</td>
+          <td className="p-3 text-gray-900">{log?.endTime || '-'}</td>
+          <td className="p-3 text-gray-900">{log?.timeWithCustomerMinutes || 0}m</td>
           <td className="p-3 text-right">
              <button onClick={() => setIsEditing(true)} className="text-blue-600 text-sm hover:underline mr-2">Edit</button>
              {!log && <button onClick={handleApplyDefaults} className="text-gray-500 text-sm hover:underline">Use Defaults</button>}
@@ -776,56 +898,373 @@ function StatsView({ month }: { month: string }) {
 function SettingsView() {
   const fuelConsumption = useLiveQuery(() => db.settings.get('fuelConsumption'));
   const fuelPrice = useLiveQuery(() => db.settings.get('fuelPrice'));
+  const activeTemplateId = useLiveQuery(() => db.settings.get('activeTemplateId'));
+  const templates = useLiveQuery(() => db.templates.toArray()) || [];
 
   const [consumption, setConsumption] = useState('');
   const [price, setPrice] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (fuelConsumption) setConsumption(String(fuelConsumption.value));
     if (fuelPrice) setPrice(String(fuelPrice.value));
-  }, [fuelConsumption, fuelPrice]);
+    if (activeTemplateId) setSelectedTemplateId(activeTemplateId.value);
+  }, [fuelConsumption, fuelPrice, activeTemplateId]);
 
   const handleSave = async () => {
     await db.settings.put({ key: 'fuelConsumption', value: Number(consumption) });
     await db.settings.put({ key: 'fuelPrice', value: Number(price) });
+    if (selectedTemplateId) {
+      await db.settings.put({ key: 'activeTemplateId', value: Number(selectedTemplateId) });
+    }
     alert('Settings saved!');
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white p-8 rounded-xl border shadow-sm">
-      <h3 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-        <Settings size={24} className="text-gray-400" />
-        General Configuration
-      </h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Consumption (Liters / 100km)</label>
-          <input 
-            type="number" 
-            step="0.1"
-            className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
-            value={consumption} 
-            onChange={e => setConsumption(e.target.value)} 
-            placeholder="e.g. 6.5"
-          />
+    <div className="max-w-md mx-auto space-y-6">
+      <div className="bg-white p-8 rounded-xl border shadow-sm">
+        <h3 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+          <Settings size={24} className="text-gray-400" />
+          General Configuration
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Active Print Template</label>
+            <select 
+              className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+              value={selectedTemplateId || ''}
+              onChange={e => setSelectedTemplateId(Number(e.target.value))}
+            >
+              <option value="">Select Template</option>
+              {templates?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Consumption (Liters / 100km)</label>
+            <input 
+              type="number" 
+              step="0.1"
+              className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+              value={consumption} 
+              onChange={e => setConsumption(e.target.value)} 
+              placeholder="e.g. 6.5"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Price (Price per Liter)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+              value={price} 
+              onChange={e => setPrice(e.target.value)} 
+              placeholder="e.g. 1.75"
+            />
+          </div>
+          <button 
+            onClick={handleSave} 
+            className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors mt-4"
+          >
+            <Save size={20} /> Save Configuration
+          </button>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Price (Price per Liter)</label>
-          <input 
-            type="number" 
-            step="0.01"
-            className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
-            value={price} 
-            onChange={e => setPrice(e.target.value)} 
-            placeholder="e.g. 1.75"
-          />
+      </div>
+    </div>
+  );
+}
+
+function TemplatesView() {
+  const templates = useLiveQuery(() => db.templates.toArray()) || [];
+  const [editingId, setEditingId] = useState<number | null>(null);
+  
+  const initialFields: TemplateField[] = [
+    { id: 'title', label: 'Protokoll Titel', x: 105, y: 20, visible: true, type: 'static', content: 'ASSISTENZPROTOKOLL', fontSize: 18, fontStyle: 'bold', color: '#000000', width: 210 },
+    { id: 'dienstleistung', label: 'Dienstleistung', x: 14, y: 30, visible: true, type: 'data', color: '#000000' },
+    { id: 'kunde', label: 'Kunde', x: 14, y: 35, visible: true, type: 'data', color: '#000000' },
+    { id: 'assistent', label: 'Assistent', x: 14, y: 40, visible: true, type: 'data', color: '#000000' },
+    { id: 'adresse', label: 'Adresse', x: 14, y: 45, visible: true, type: 'data', color: '#000000' },
+    { id: 'anfahrtFrom', label: 'Anfahrt von', x: 14, y: 50, visible: false, type: 'data', color: '#000000' },
+    { id: 'abfahrtTo', label: 'Abfahrt zu', x: 14, y: 55, visible: false, type: 'data', color: '#000000' },
+    { id: 'driveTimeMinutes', label: 'Fahrtzeit', x: 14, y: 60, visible: false, type: 'data', color: '#000000' },
+    { id: 'km', label: 'Kilometer', x: 14, y: 65, visible: false, type: 'data', color: '#000000' },
+    { id: 'month', label: 'Monat', x: 14, y: 70, visible: true, type: 'data', color: '#000000' },
+  ];
+
+  const [formData, setFormData] = useState<Partial<Template>>({
+    name: '',
+    title: '',
+    fields: initialFields,
+    primaryColor: '#c8c8c8',
+    fontSize: 8,
+    tableY: 80
+  });
+
+  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
+  const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!formData.name) return;
+    const data = { ...formData } as Template;
+    if (editingId) {
+      const { id, ...updateData } = data;
+      await db.templates.update(editingId, updateData);
+    } else {
+      await db.templates.add(data);
+    }
+    setEditingId(null);
+    setFormData({
+      name: '',
+      title: '',
+      fields: initialFields,
+      primaryColor: '#c8c8c8',
+      fontSize: 8,
+      tableY: 80
+    });
+  };
+
+  const updateField = (id: string, updates: Partial<TemplateField>) => {
+    setFormData(prev => ({
+      ...prev,
+      fields: prev.fields?.map(f => f.id === id ? { ...f, ...updates } : f)
+    }));
+  };
+
+  const addField = (type: 'static' | 'image') => {
+    const id = `${type}_${Date.now()}`;
+    const newField: TemplateField = {
+      id,
+      label: type === 'static' ? 'New Text' : 'New Image',
+      x: 50,
+      y: 50,
+      visible: true,
+      type,
+      content: type === 'static' ? 'Your Text Here' : '',
+      color: '#000000',
+      width: type === 'image' ? 30 : undefined,
+      height: type === 'image' ? 30 : undefined,
+    };
+    setFormData(prev => ({
+      ...prev,
+      fields: [...(prev.fields || []), newField]
+    }));
+    setExpandedFieldId(id);
+  };
+
+  const removeField = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      fields: prev.fields?.filter(f => f.id !== id)
+    }));
+  };
+
+  const handleImageUpload = (id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      updateField(id, { content: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl border shadow-sm">
+        <h3 className="text-lg font-bold mb-4 text-gray-900">{editingId ? 'Edit Template' : 'Create New Template'}</h3>
+        <p className="text-sm text-gray-500 mb-6">Create and position fields for your PDF protocol. Drag items on the visual editor to move them.</p>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+               <input className="border rounded p-2 bg-white text-gray-900" placeholder="Template Name" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+               <input className="border rounded p-2 bg-white text-gray-900" placeholder="Protocol Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
+            </div>
+
+            <div className="space-y-2 border rounded p-4 bg-gray-50 max-h-96 overflow-y-auto">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-bold text-sm text-gray-700 uppercase">Field Configuration</h4>
+                <div className="flex gap-1">
+                  <button onClick={() => addField('static')} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded">Add Text</button>
+                  <button onClick={() => addField('image')} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded">Add Image</button>
+                </div>
+              </div>
+              {formData.fields?.map(field => (
+                <div key={field.id} className="bg-white p-2 rounded border shadow-sm space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={field.visible} onChange={e => updateField(field.id, { visible: e.target.checked })} />
+                    <span className="text-sm font-medium flex-1 text-gray-900 cursor-pointer" onClick={() => setExpandedFieldId(expandedFieldId === field.id ? null : field.id)}>
+                      {field.label} {field.type && <span className="text-[10px] bg-gray-100 px-1 rounded text-gray-400">{field.type}</span>}
+                    </span>
+                    <div className="flex gap-1 items-center">
+                      <span className="text-xs text-gray-500">X:</span>
+                      <input type="number" className="w-12 border rounded p-1 text-xs bg-white text-gray-900" value={field.x} onChange={e => updateField(field.id, { x: Number(e.target.value) })} />
+                      <span className="text-xs text-gray-500">Y:</span>
+                      <input type="number" className="w-12 border rounded p-1 text-xs bg-white text-gray-900" value={field.y} onChange={e => updateField(field.id, { y: Number(e.target.value) })} />
+                      {field.id.includes('_') && <button onClick={() => removeField(field.id)} className="text-red-500 p-1"><Trash2 size={14} /></button>}
+                    </div>
+                  </div>
+                  
+                  {expandedFieldId === field.id && (
+                    <div className="p-2 bg-gray-50 rounded border-t space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Label</label>
+                          <input className="w-full border rounded p-1 text-xs" value={field.label} onChange={e => updateField(field.id, { label: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Font Size</label>
+                          <input type="number" className="w-full border rounded p-1 text-xs" value={field.fontSize || ''} placeholder="Default" onChange={e => updateField(field.id, { fontSize: Number(e.target.value) })} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Font Style</label>
+                          <select className="w-full border rounded p-1 text-xs" value={field.fontStyle || 'normal'} onChange={e => updateField(field.id, { fontStyle: e.target.value as any })}>
+                            <option value="normal">Normal</option>
+                            <option value="bold">Bold</option>
+                            <option value="italic">Italic</option>
+                            <option value="bolditalic">Bold Italic</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Text Color</label>
+                          <input type="color" className="w-full h-8 border rounded p-1" value={field.color || '#000000'} onChange={e => updateField(field.id, { color: e.target.value })} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Width (mm)</label>
+                          <input type="number" className="w-full border rounded p-1 text-xs" value={field.width || ''} placeholder="Auto" onChange={e => updateField(field.id, { width: Number(e.target.value) })} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Height (mm)</label>
+                          <input type="number" className="w-full border rounded p-1 text-xs" value={field.height || ''} placeholder="Auto" onChange={e => updateField(field.id, { height: Number(e.target.value) })} />
+                        </div>
+                      </div>
+
+                      {(field.type === 'static' || field.id === 'title') && (
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Content</label>
+                          <textarea className="w-full border rounded p-1 text-xs" rows={2} value={field.content || ''} onChange={e => updateField(field.id, { content: e.target.value })} />
+                        </div>
+                      )}
+
+                      {field.type === 'image' && (
+                        <div>
+                          <label className="text-[10px] block font-bold text-gray-500">Image</label>
+                          <input type="file" accept="image/*" className="text-[10px] w-full" onChange={e => e.target.files?.[0] && handleImageUpload(field.id, e.target.files[0])} />
+                          {field.content && <img src={field.content} className="mt-1 h-12 object-contain border rounded p-1" alt="Preview" />}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-200 mt-4">
+                 <span className="text-sm font-bold text-blue-700 flex-1">Table Start Position (Y)</span>
+                 <input type="number" className="w-16 border rounded p-1 text-xs bg-white text-gray-900" value={formData.tableY || 80} onChange={e => setFormData({...formData, tableY: Number(e.target.value)})} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">Theme Color</label>
+                 <input type="color" className="border rounded h-10 w-full p-1 bg-white" value={formData.primaryColor || '#c8c8c8'} onChange={e => setFormData({...formData, primaryColor: e.target.value})} />
+               </div>
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">Font Size (pt)</label>
+                 <input type="number" className="border rounded p-1 w-full bg-white text-gray-900" value={formData.fontSize || 8} onChange={e => setFormData({...formData, fontSize: Number(e.target.value)})} />
+               </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col">
+            <h4 className="font-bold text-sm text-gray-500 uppercase mb-2 flex items-center gap-2">
+              <Move size={16} /> Visual Layout Editor (Draft)
+            </h4>
+            <div 
+              className="relative bg-white border-2 border-dashed border-gray-300 rounded-lg aspect-[1/1.4] w-full max-w-[400px] shadow-inner overflow-hidden cursor-crosshair mx-auto"
+              style={{ backgroundSize: '20px 20px', backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)' }}
+              onMouseMove={(e) => {
+                if (!draggedFieldId) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = Math.round(((e.clientX - rect.left) / rect.width) * 210);
+                const y = Math.round(((e.clientY - rect.top) / rect.height) * 297);
+                updateField(draggedFieldId, { x, y });
+              }}
+              onMouseUp={() => setDraggedFieldId(null)}
+              onMouseLeave={() => setDraggedFieldId(null)}
+            >
+              {/* PDF Header Title Placeholder (Removed - title is now a draggable field) */}
+              
+              {/* Draggable Fields */}
+              {formData.fields?.filter(f => f.visible).map(field => (
+                <div 
+                  key={field.id}
+                  className={`absolute p-1 border rounded text-[8px] whitespace-nowrap cursor-move select-none ${draggedFieldId === field.id ? 'bg-blue-100 border-blue-500 z-10' : 'bg-white border-gray-200 hover:border-blue-300'}`}
+                  style={{ 
+                    top: field.y !== undefined ? `${(field.y / 297) * 100}%` : '0%',
+                    transform: field.id === 'title' ? 'translate(-50%, -50%)' : 'translate(-5%, -50%)',
+                    fontSize: field.fontSize ? `${(field.fontSize / 297) * 100 * 3.5}px` : '8px',
+                    fontWeight: field.fontStyle?.includes('bold') ? 'bold' : 'normal',
+                    fontStyle: field.fontStyle?.includes('italic') ? 'italic' : 'normal',
+                    color: field.color || 'black',
+                    textAlign: field.id === 'title' ? 'center' : 'left',
+                    width: field.width ? `${(field.width / 210) * 100}%` : (field.id === 'title' ? '100%' : 'auto'),
+                    height: field.height ? `${(field.height / 297) * 100}%` : 'auto',
+                    left: field.id === 'title' ? '50%' : (field.x !== undefined ? `${(field.x / 210) * 100}%` : '0%'),
+                    overflow: 'hidden',
+                  }}
+                  onMouseDown={() => setDraggedFieldId(field.id)}
+                >
+                  {field.type === 'image' && field.content ? (
+                    <img src={field.content} className="w-full h-full object-contain" alt="Logo" />
+                  ) : (
+                    <>
+                      <span className="font-bold">{field.label}:</span> 
+                      <span> {field.type === 'static' || field.id === 'title' ? field.content : '[Data]'}</span>
+                    </>
+                  )}
+                </div>
+              ))}
+
+              {/* Table Marker */}
+              <div 
+                className="absolute left-0 right-0 border-t-2 border-blue-400 border-dotted bg-blue-50 bg-opacity-20 flex items-center justify-center pointer-events-none"
+                style={{ top: `${((formData.tableY || 80) / 297) * 100}%`, bottom: 0 }}
+              >
+                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Protocol Table Area</span>
+              </div>
+            </div>
+            <p className="text-center text-xs text-gray-400 mt-2 italic">Drag fields to position them. 1 unit = 1mm on A4.</p>
+          </div>
         </div>
-        <button 
-          onClick={handleSave} 
-          className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors mt-4"
-        >
-          <Save size={20} /> Save Configuration
-        </button>
+        
+        <div className="mt-8 pt-6 border-t flex gap-3">
+          <button onClick={handleSave} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md">
+            <Save size={20} /> Save Template
+          </button>
+          {editingId && <button onClick={() => {setEditingId(null); setFormData({name: '', title: '', fields: [], primaryColor: '#c8c8c8', fontSize: 8, tableY: 80});}} className="bg-gray-100 px-8 py-3 rounded-lg font-bold text-gray-600">Cancel</button>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {templates?.map(t => (
+          <div key={t.id} className="bg-white p-5 rounded-xl border shadow-sm flex justify-between items-center group hover:border-blue-200 transition-all">
+            <div className="flex items-center gap-4">
+               <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold" style={{ backgroundColor: t.primaryColor }}>
+                 {t.name.charAt(0)}
+               </div>
+               <div>
+                 <h4 className="font-bold text-gray-800">{t.name}</h4>
+                 <p className="text-xs text-gray-400">{t.fields?.filter(f => f.visible).length || 0} fields visible</p>
+               </div>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={() => {setEditingId(t.id!); setFormData(t);}} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Plus size={18} /></button>
+              <button onClick={async () => { if(confirm('Delete template?')) await db.templates.delete(t.id!); }} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -837,7 +1276,7 @@ function HistoryView() {
   return (
     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
       <table className="w-full text-left">
-        <thead className="bg-gray-50 text-xs font-bold text-gray-400 uppercase">
+        <thead className="bg-gray-50 text-xs font-bold text-gray-700 uppercase">
           <tr>
             <th className="p-4">Time</th>
             <th className="p-4">Action</th>
