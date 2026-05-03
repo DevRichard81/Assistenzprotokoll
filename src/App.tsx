@@ -21,6 +21,38 @@ async function logChange(entityType: 'customer' | 'log', entityId: number, actio
   });
 }
 
+function MonthPicker({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const [year, month] = value.split('-').map(Number);
+  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  return (
+    <div className="flex gap-2">
+      <select 
+        className="border rounded px-3 py-2 bg-white"
+        value={month}
+        onChange={(e) => onChange(`${year}-${String(e.target.value).padStart(2, '0')}`)}
+      >
+        {months.map((m, i) => (
+          <option key={m} value={i + 1}>{m}</option>
+        ))}
+      </select>
+      <select 
+        className="border rounded px-3 py-2 bg-white"
+        value={year}
+        onChange={(e) => onChange(`${e.target.value}-${String(month).padStart(2, '0')}`)}
+      >
+        {years.map(y => (
+          <option key={y} value={y}>{y}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeView, setActiveView] = useState<View>('logs');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
@@ -59,15 +91,13 @@ export default function App() {
                   onChange={(e) => setSelectedCustomerId(Number(e.target.value))}
                 >
                   <option value="">Select Customer</option>
-                  {customers?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {customers?.map(c => <option key={c.id} value={c.id}>{c.kunde}</option>)}
                 </select>
              )}
              {(activeView === 'logs' || activeView === 'stats') && (
-               <input 
-                 type="month" 
-                 className="border rounded px-3 py-2"
+               <MonthPicker 
                  value={selectedMonth}
-                 onChange={(e) => setSelectedMonth(e.target.value)}
+                 onChange={setSelectedMonth}
                />
              )}
           </div>
@@ -104,15 +134,16 @@ function CustomerView() {
   const [formData, setFormData] = useState<Partial<Customer>>({});
 
   const handleSave = async () => {
-    if (!formData.name) return;
-    const data = {
-      name: formData.name || '',
-      address: formData.address || '',
-      birthDate: formData.birthDate || '',
-      insuranceNumber: formData.insuranceNumber || '',
-      defaultStartTime: formData.defaultStartTime || '08:00',
-      defaultEndTime: formData.defaultEndTime || '16:00',
-      defaultActivities: formData.defaultActivities || '',
+    if (!formData.kunde) return;
+    const data: Customer = {
+      dienstleistung: formData.dienstleistung || '',
+      kunde: formData.kunde || '',
+      assistent: formData.assistent || '',
+      adresse: formData.adresse || '',
+      anfahrtFrom: formData.anfahrtFrom || '',
+      abfahrtTo: formData.abfahrtTo || '',
+      driveTimeMinutes: Number(formData.driveTimeMinutes) || 0,
+      km: Number(formData.km) || 0,
     };
 
     if (editingId) {
@@ -120,7 +151,7 @@ function CustomerView() {
       await db.customers.update(editingId, data);
       await logChange('customer', editingId, 'update', old, data);
     } else {
-      const id = await db.customers.add(data as Customer);
+      const id = await db.customers.add(data);
       await logChange('customer', id as number, 'create', undefined, data);
     }
     setEditingId(null);
@@ -139,13 +170,14 @@ function CustomerView() {
       <div className="bg-white p-6 rounded-xl border shadow-sm">
         <h3 className="text-lg font-bold mb-4">{editingId ? 'Edit Customer' : 'Add New Customer'}</h3>
         <div className="grid grid-cols-2 gap-4">
-          <input className="border rounded p-2" placeholder="Full Name" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Address" value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} />
-          <input className="border rounded p-2" type="date" placeholder="Birth Date" value={formData.birthDate || ''} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Insurance Number" value={formData.insuranceNumber || ''} onChange={e => setFormData({...formData, insuranceNumber: e.target.value})} />
-          <input className="border rounded p-2" type="time" placeholder="Default Start" value={formData.defaultStartTime || ''} onChange={e => setFormData({...formData, defaultStartTime: e.target.value})} />
-          <input className="border rounded p-2" type="time" placeholder="Default End" value={formData.defaultEndTime || ''} onChange={e => setFormData({...formData, defaultEndTime: e.target.value})} />
-          <textarea className="border rounded p-2 col-span-2" placeholder="Default Activities" value={formData.defaultActivities || ''} onChange={e => setFormData({...formData, defaultActivities: e.target.value})} />
+          <input className="border rounded p-2" placeholder="Dienstleistung" value={formData.dienstleistung || ''} onChange={e => setFormData({...formData, dienstleistung: e.target.value})} />
+          <input className="border rounded p-2" placeholder="Kunde" value={formData.kunde || ''} onChange={e => setFormData({...formData, kunde: e.target.value})} />
+          <input className="border rounded p-2" placeholder="Assistent" value={formData.assistent || ''} onChange={e => setFormData({...formData, assistent: e.target.value})} />
+          <input className="border rounded p-2" placeholder="Adresse" value={formData.adresse || ''} onChange={e => setFormData({...formData, adresse: e.target.value})} />
+          <input className="border rounded p-2" placeholder="Anfahrt from" value={formData.anfahrtFrom || ''} onChange={e => setFormData({...formData, anfahrtFrom: e.target.value})} />
+          <input className="border rounded p-2" placeholder="Abfahrt to" value={formData.abfahrtTo || ''} onChange={e => setFormData({...formData, abfahrtTo: e.target.value})} />
+          <input className="border rounded p-2" type="number" placeholder="Drive time (min)" value={formData.driveTimeMinutes || ''} onChange={e => setFormData({...formData, driveTimeMinutes: Number(e.target.value)})} />
+          <input className="border rounded p-2" type="number" placeholder="KM" value={formData.km || ''} onChange={e => setFormData({...formData, km: Number(e.target.value)})} />
         </div>
         <div className="mt-4 flex gap-2">
           <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700">
@@ -159,8 +191,9 @@ function CustomerView() {
         {customers?.map(c => (
           <div key={c.id} className="bg-white p-4 rounded-xl border shadow-sm flex justify-between items-start">
             <div>
-              <h4 className="font-bold text-gray-800">{c.name}</h4>
-              <p className="text-sm text-gray-500">{c.insuranceNumber}</p>
+              <h4 className="font-bold text-gray-800">{c.kunde}</h4>
+              <p className="text-sm text-gray-500">{c.dienstleistung}</p>
+              <p className="text-xs text-gray-400">{c.adresse}</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => {setEditingId(c.id!); setFormData(c);}} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Plus size={18} /></button>
@@ -179,12 +212,26 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
   const endDate = endOfMonth(startDate);
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
+  const [selectedDayStrings, setSelectedDayStrings] = useState<string[]>([]);
+
   const logs = useLiveQuery(
     () => (customerId ? db.logs.where('customerId').equals(customerId).filter(l => l.date.startsWith(month)).toArray() : Promise.resolve([])) as Promise<DailyLog[]>,
     [customerId, month]
   );
 
+  useEffect(() => {
+    if (logs) {
+      setSelectedDayStrings(logs.map(l => l.date));
+    }
+  }, [logs]);
+
   const customer = useLiveQuery(() => (customerId ? db.customers.get(customerId) : Promise.resolve(undefined)) as Promise<Customer | undefined>, [customerId]);
+
+  const toggleDaySelection = (dateStr: string) => {
+    setSelectedDayStrings(prev => 
+      prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]
+    );
+  };
 
   const handleSaveLog = async (date: string, data: Partial<DailyLog>) => {
     if (!customerId) return;
@@ -192,11 +239,11 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     const logData = {
       customerId,
       date,
+      foerderziel: data.foerderziel || '',
+      assistenzinhalt: data.assistenzinhalt || '',
       startTime: data.startTime || '',
       endTime: data.endTime || '',
-      activities: data.activities || '',
-      kmDriven: Number(data.kmDriven) || 0,
-      pauseMinutes: Number(data.pauseMinutes) || 0,
+      timeWithCustomerMinutes: Number(data.timeWithCustomerMinutes) || 0,
     };
 
     if (existing) {
@@ -216,34 +263,42 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     doc.text('ASSISTENZPROTOKOLL', 105, 20, { align: 'center' });
     
     doc.setFontSize(10);
-    doc.text(`Kunde: ${customer.name}`, 14, 30);
-    doc.text(`Adresse: ${customer.address}`, 14, 35);
-    doc.text(`Versicherungsnr: ${customer.insuranceNumber}`, 14, 40);
-    doc.text(`Monat: ${month}`, 14, 45);
+    doc.text(`Dienstleistung: ${customer.dienstleistung}`, 14, 30);
+    doc.text(`Kunde: ${customer.kunde}`, 14, 35);
+    doc.text(`Assistent: ${customer.assistent}`, 14, 40);
+    doc.text(`Adresse: ${customer.adresse}`, 14, 45);
+    doc.text(`Monat: ${month}`, 14, 50);
 
-    const tableData = days.map(day => {
+    const exportDays = days.filter(d => selectedDayStrings.includes(format(d, 'yyyy-MM-dd')));
+
+    if (exportDays.length === 0) {
+      alert("Please select at least one day to export.");
+      return;
+    }
+
+    const tableData = exportDays.map(day => {
       const dateStr = format(day, 'yyyy-MM-dd');
       const log = logs.find(l => l.date === dateStr);
       return [
         format(day, 'dd.MM.yyyy'),
+        log?.foerderziel || '-',
+        log?.assistenzinhalt || '-',
         log?.startTime || '-',
         log?.endTime || '-',
-        log?.pauseMinutes || '0',
-        log?.activities || '',
-        log?.kmDriven || '0'
+        log?.timeWithCustomerMinutes || '0'
       ];
     });
 
     autoTable(doc, {
-      startY: 55,
-      head: [['Datum', 'Beginn', 'Ende', 'Pause (min)', 'Tätigkeiten', 'KM']],
+      startY: 60,
+      head: [['Datum', 'Förderziel', 'Assistenzinhalt', 'Beginn', 'Ende', 'Zeit (min)']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [200, 200, 200], textColor: 0 },
       styles: { fontSize: 8 }
     });
 
-    doc.save(`Protokoll_${customer.name}_${month}.pdf`);
+    doc.save(`Protokoll_${customer.kunde}_${month}.pdf`);
   };
 
   if (!customerId) return <div className="text-center p-12 bg-white rounded-xl border">Please select a customer to view logs.</div>;
@@ -251,20 +306,35 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
   return (
     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
       <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-         <h3 className="font-bold">Protocol for {customer?.name} ({month})</h3>
-         <button onClick={generatePDF} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700">
-           <FileText size={18} /> Export PDF
-         </button>
+         <h3 className="font-bold">Protocol for {customer?.kunde} ({month})</h3>
+         <div className="flex gap-2">
+           <button 
+             onClick={() => setSelectedDayStrings(days.map(d => format(d, 'yyyy-MM-dd')))}
+             className="text-xs text-blue-600 hover:underline"
+           >
+             Select All
+           </button>
+           <button 
+             onClick={() => setSelectedDayStrings([])}
+             className="text-xs text-gray-500 hover:underline"
+           >
+             Clear
+           </button>
+           <button onClick={generatePDF} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2">
+             <FileText size={18} /> Export PDF ({selectedDayStrings.length})
+           </button>
+         </div>
       </div>
       <table className="w-full text-left border-collapse">
         <thead className="bg-gray-50 text-sm uppercase text-gray-500">
           <tr>
+            <th className="p-3 border-b w-10"></th>
             <th className="p-3 border-b">Date</th>
+            <th className="p-3 border-b">Förderziel</th>
+            <th className="p-3 border-b">Assistenzinhalt</th>
             <th className="p-3 border-b">Start</th>
             <th className="p-3 border-b">End</th>
-            <th className="p-3 border-b">Pause</th>
-            <th className="p-3 border-b">Activities</th>
-            <th className="p-3 border-b">KM</th>
+            <th className="p-3 border-b">Time (min)</th>
             <th className="p-3 border-b text-right">Actions</th>
           </tr>
         </thead>
@@ -272,7 +342,18 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
           {days.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const log = logs?.find(l => l.date === dateStr);
-            return <LogRow key={dateStr} day={day} log={log} onSave={(d) => handleSaveLog(dateStr, d)} defaults={customer} />;
+            const isSelected = selectedDayStrings.includes(dateStr);
+            return (
+              <LogRow 
+                key={dateStr} 
+                day={day} 
+                log={log} 
+                isSelected={isSelected}
+                onToggle={() => toggleDaySelection(dateStr)}
+                onSave={(d) => handleSaveLog(dateStr, d)} 
+                defaults={customer} 
+              />
+            );
           })}
         </tbody>
       </table>
@@ -280,7 +361,7 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
   );
 }
 
-function LogRow({ day, log, onSave, defaults }: { day: Date, log?: DailyLog, onSave: (d: Partial<DailyLog>) => void, defaults?: Customer }) {
+function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Date, log?: DailyLog, isSelected: boolean, onToggle: () => void, onSave: (d: Partial<DailyLog>) => void, defaults?: Customer }) {
   const [isEditing, setIsEditing] = useState(false);
   const [data, setData] = useState<Partial<DailyLog>>(log || {});
 
@@ -289,23 +370,32 @@ function LogRow({ day, log, onSave, defaults }: { day: Date, log?: DailyLog, onS
   const handleApplyDefaults = () => {
     setData({
       ...data,
-      startTime: defaults?.defaultStartTime || '08:00',
-      endTime: defaults?.defaultEndTime || '16:00',
-      activities: defaults?.defaultActivities || '',
+      startTime: '08:00',
+      endTime: '16:00',
+      foerderziel: '',
+      assistenzinhalt: '',
     });
     setIsEditing(true);
   };
 
   return (
-    <tr className={`border-b hover:bg-gray-50 ${!log ? 'text-gray-400' : ''}`}>
+    <tr className={`border-b hover:bg-gray-50 ${!log ? 'text-gray-400' : 'text-gray-900'}`}>
+      <td className="p-3 border-b text-center">
+        <input 
+          type="checkbox" 
+          checked={isSelected} 
+          onChange={onToggle}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      </td>
       <td className="p-3 font-medium">{format(day, 'dd.MM (EEE)')}</td>
       {isEditing ? (
         <>
+          <td className="p-1"><input type="text" className="border rounded p-1 w-full" value={data.foerderziel || ''} onChange={e => setData({...data, foerderziel: e.target.value})} /></td>
+          <td className="p-1"><input type="text" className="border rounded p-1 w-full" value={data.assistenzinhalt || ''} onChange={e => setData({...data, assistenzinhalt: e.target.value})} /></td>
           <td className="p-1"><input type="time" className="border rounded p-1 w-full" value={data.startTime || ''} onChange={e => setData({...data, startTime: e.target.value})} /></td>
           <td className="p-1"><input type="time" className="border rounded p-1 w-full" value={data.endTime || ''} onChange={e => setData({...data, endTime: e.target.value})} /></td>
-          <td className="p-1"><input type="number" className="border rounded p-1 w-20" value={data.pauseMinutes || 0} onChange={e => setData({...data, pauseMinutes: Number(e.target.value)})} /></td>
-          <td className="p-1"><input type="text" className="border rounded p-1 w-full" value={data.activities || ''} onChange={e => setData({...data, activities: e.target.value})} /></td>
-          <td className="p-1"><input type="number" className="border rounded p-1 w-20" value={data.kmDriven || 0} onChange={e => setData({...data, kmDriven: Number(e.target.value)})} /></td>
+          <td className="p-1"><input type="number" className="border rounded p-1 w-24" value={data.timeWithCustomerMinutes || 0} onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})} /></td>
           <td className="p-3 text-right flex justify-end gap-1">
             <button onClick={() => { onSave(data); setIsEditing(false); }} className="text-green-600 p-1"><Save size={18} /></button>
             <button onClick={() => setIsEditing(false)} className="text-gray-400 p-1">X</button>
@@ -313,11 +403,11 @@ function LogRow({ day, log, onSave, defaults }: { day: Date, log?: DailyLog, onS
         </>
       ) : (
         <>
+          <td className="p-3 truncate max-w-[150px]">{log?.foerderziel || '-'}</td>
+          <td className="p-3 truncate max-w-[200px]">{log?.assistenzinhalt || '-'}</td>
           <td className="p-3">{log?.startTime || '-'}</td>
           <td className="p-3">{log?.endTime || '-'}</td>
-          <td className="p-3">{log?.pauseMinutes || 0}m</td>
-          <td className="p-3 truncate max-w-xs">{log?.activities || '-'}</td>
-          <td className="p-3">{log?.kmDriven || 0} km</td>
+          <td className="p-3">{log?.timeWithCustomerMinutes || 0}m</td>
           <td className="p-3 text-right">
              <button onClick={() => setIsEditing(true)} className="text-blue-600 text-sm hover:underline mr-2">Edit</button>
              {!log && <button onClick={handleApplyDefaults} className="text-gray-500 text-sm hover:underline">Use Defaults</button>}
@@ -333,31 +423,32 @@ function StatsView({ customerId, month }: { customerId: number | null, month: st
     () => (customerId ? db.logs.where('customerId').equals(customerId).filter(l => l.date.startsWith(month)).toArray() : Promise.resolve([])) as Promise<DailyLog[]>,
     [customerId, month]
   );
+  const customer = useLiveQuery(() => (customerId ? db.customers.get(customerId) : Promise.resolve(undefined)) as Promise<Customer | undefined>, [customerId]);
 
   if (!customerId) return <div>Please select a customer.</div>;
 
-  const totalKm = logs?.reduce((sum, l) => sum + (l.kmDriven || 0), 0) || 0;
-  const totalMinutes = logs?.reduce((sum, l) => {
-    if (!l.startTime || !l.endTime) return sum;
-    const start = new Date(`2000-01-01T${l.startTime}`);
-    const end = new Date(`2000-01-01T${l.endTime}`);
-    let diff = (end.getTime() - start.getTime()) / 60000;
-    if (diff < 0) diff += 24 * 60; // handle overnight
-    return sum + (diff - (l.pauseMinutes || 0));
-  }, 0) || 0;
+  const totalKm = (customer?.km || 0) * (logs?.length || 0);
+  const totalMinutes = logs?.reduce((sum, l) => sum + (l.timeWithCustomerMinutes || 0), 0) || 0;
+  const totalDriveTime = (customer?.driveTimeMinutes || 0) * (logs?.length || 0);
 
   const hours = Math.floor(totalMinutes / 60);
   const minutes = Math.round(totalMinutes % 60);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div className="bg-white p-6 rounded-xl border shadow-sm">
         <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Distance</h3>
         <p className="text-4xl font-black text-blue-600">{totalKm} <span className="text-lg">km</span></p>
+        <p className="text-xs text-gray-400 mt-2">Based on {customer?.km}km per day</p>
       </div>
       <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Working Time</h3>
+        <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Time with Customer</h3>
         <p className="text-4xl font-black text-green-600">{hours}h {minutes}m</p>
+      </div>
+      <div className="bg-white p-6 rounded-xl border shadow-sm">
+        <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Drive Time</h3>
+        <p className="text-4xl font-black text-orange-600">{Math.floor(totalDriveTime / 60)}h {totalDriveTime % 60}m</p>
+        <p className="text-xs text-gray-400 mt-2">Based on {customer?.driveTimeMinutes}min per day</p>
       </div>
     </div>
   );
