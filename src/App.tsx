@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { PDFDocument, PDFDict, PDFName, PDFString, PDFHexString } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFName, PDFString, PDFHexString, PDFBool } from 'pdf-lib';
 import { db, type Customer, type DailyLog } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
@@ -420,8 +420,19 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
 
           if (name && normalizedCandidates.has(normalizeFieldName(name))) {
             annot.set(PDFName.of('Contents'), PDFString.of(value));
+            annot.set(PDFName.of('RC'), PDFString.of(value));
+            annot.set(PDFName.of('V'), PDFString.of(value));
+            annot.set(PDFName.of('DV'), PDFString.of(value));
+            annot.delete(PDFName.of('AP'));
           }
         });
+      });
+    };
+
+    const replacePlaceholdersInText = (text: string, dataMap: Record<string, string>) => {
+      return text.replace(/\{\{\s*([^}]+?)\s*}}/g, (full, rawToken) => {
+        const resolved = resolveDataValue(rawToken, dataMap);
+        return resolved !== undefined ? resolved : full;
       });
     };
 
@@ -528,9 +539,7 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
             const annot = pdfDoc.context.lookup(ref);
             if (!(annot instanceof PDFDict)) return;
             const title = annot.get(PDFName.of('T'));
-            const contents = annot.get(PDFName.of('Contents'));
             if (title instanceof PDFString || title instanceof PDFHexString) autoTokens.add(title.decodeText());
-            if (contents instanceof PDFString || contents instanceof PDFHexString) autoTokens.add(contents.decodeText());
           });
         });
 
@@ -540,6 +549,36 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
             setPdfFieldValue(pdfDoc, token, value, form);
           }
         });
+
+        // Replace inline placeholder text inside annotation content, e.g. "Kunde/in: {{kunde}}".
+        pdfDoc.getPages().forEach((page) => {
+          const annots = page.node.Annots();
+          if (!annots) return;
+
+          annots.asArray().forEach((ref) => {
+            const annot = pdfDoc.context.lookup(ref);
+            if (!(annot instanceof PDFDict)) return;
+
+            const contents = annot.get(PDFName.of('Contents'));
+            if (!(contents instanceof PDFString || contents instanceof PDFHexString)) return;
+
+            const oldText = contents.decodeText();
+            const newText = replacePlaceholdersInText(oldText, dataMap);
+            if (newText === oldText) return;
+
+            annot.set(PDFName.of('Contents'), PDFString.of(newText));
+            annot.set(PDFName.of('RC'), PDFString.of(newText));
+            annot.set(PDFName.of('V'), PDFString.of(newText));
+            annot.set(PDFName.of('DV'), PDFString.of(newText));
+            annot.delete(PDFName.of('AP'));
+          });
+        });
+
+        // Ask viewers to regenerate appearances from updated values.
+        const acroForm = pdfDoc.catalog.get(PDFName.of('AcroForm'));
+        if (acroForm instanceof PDFDict) {
+          acroForm.set(PDFName.of('NeedAppearances'), PDFBool.True);
+        }
 
         form.flatten();
 
