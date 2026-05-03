@@ -47,32 +47,6 @@ export interface Setting {
   value: any;
 }
 
-export interface TemplateField {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  visible: boolean;
-  type?: 'data' | 'static' | 'image';
-  content?: string; // For static text or base64 image
-  color?: string; // Hex color "#RRGGBB"
-  fontSize?: number;
-  fontStyle?: 'normal' | 'bold' | 'italic' | 'bolditalic';
-  width?: number;
-  height?: number;
-  zOrder?: number;
-}
-
-export interface Template {
-  id?: number;
-  name: string;
-  title: string;
-  fields: TemplateField[];
-  primaryColor: string; // Hex color "#RRGGBB"
-  fontSize: number;
-  tableY: number;
-}
-
 export interface PDFTemplate {
   id?: number;
   name: string;
@@ -91,19 +65,18 @@ const db = new Dexie('TanyaFillOutDB') as Dexie & {
   logs: EntityTable<DailyLog, 'id'>;
   auditTrail: EntityTable<ChangeLog, 'id'>;
   settings: EntityTable<Setting, 'key'>;
-  templates: EntityTable<Template, 'id'>;
   pdfTemplates: EntityTable<PDFTemplate, 'id'>;
 };
 
-db.version(11).stores({
+db.version(12).stores({
   customers: '++id, kunde',
   logs: '++id, customerId, date',
   auditTrail: '++id, entityType, entityId, timestamp',
   settings: 'key',
-  templates: '++id, name',
   pdfTemplates: '++id, name'
 }).upgrade(tx => {
-  // Migration logic if needed
+  // We keep templates table in DB but we don't expose it in the type anymore
+  // to avoid breaking changes if user has data, but we stop using it in App.
 });
 
 function rgbToHex(r: number, g: number, b: number) {

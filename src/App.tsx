@@ -1,14 +1,14 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { PDFDocument, PDFDict, PDFName, PDFString, PDFHexString } from 'pdf-lib';
-import { db, type Customer, type DailyLog, type Template, type TemplateField, type PDFTemplate } from './db';
+import { db, type Customer, type DailyLog } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settings, Palette, Move, Download, Search, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settings, Download, Search, RefreshCw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // --- Types ---
-type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings' | 'templates' | 'pdfTemplates';
+type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings' | 'pdfTemplates';
 
 // --- Helper for Audit Logging ---
 async function logChange(entityType: 'customer' | 'log', entityId: number, action: 'create' | 'update' | 'delete', oldValue?: any, newValue?: any) {
@@ -60,104 +60,21 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
 
   useEffect(() => {
-    // Seed default templates if they don't exist
-    const seedTemplates = async () => {
+    // Check if initial settings exist
+    const checkSettings = async () => {
       try {
-          const count = await db.templates.count();
-          
-          const defaultFields: TemplateField[] = [
-            { id: 'title', label: 'Protokoll Titel', x: 105, y: 20, visible: true, type: 'static', content: 'ASSISTENZPROTOKOLL', fontSize: 18, fontStyle: 'bold' },
-            { id: 'dienstleistung', label: 'Dienstleistung', x: 14, y: 30, visible: true, type: 'data' },
-            { id: 'kunde', label: 'Kunde', x: 14, y: 35, visible: true, type: 'data' },
-            { id: 'assistent', label: 'Assistent', x: 14, y: 40, visible: true, type: 'data' },
-            { id: 'adresse', label: 'Adresse', x: 14, y: 45, visible: true, type: 'data' },
-            { id: 'anfahrtFrom', label: 'Anfahrt von', x: 14, y: 50, visible: false, type: 'data' },
-            { id: 'abfahrtTo', label: 'Abfahrt zu', x: 14, y: 55, visible: false, type: 'data' },
-            { id: 'driveTimeMinutes', label: 'Fahrtzeit', x: 14, y: 60, visible: false, type: 'data' },
-            { id: 'km', label: 'Kilometer', x: 14, y: 65, visible: false, type: 'data' },
-            { id: 'month', label: 'Monat', x: 14, y: 70, visible: true, type: 'data' },
-          ];
-
-          const lebenshilfeFields: TemplateField[] = [
-            // Top Section
-            { id: 'lh_logo_box', label: 'Logo', x: 14, y: 10, visible: true, type: 'static', content: 'lebenshilfe', fontSize: 14, fontStyle: 'bold', color: '#10b981', width: 40, height: 15 },
-            { id: 'lh_region', label: 'Region', x: 14, y: 25, visible: true, type: 'static', content: 'Region Knittelfeld', fontSize: 10, fontStyle: 'bold', color: '#7c2d12' },
-            { id: 'lh_wohnassistenz', label: 'Wohnassistenz', x: 105, y: 15, visible: true, type: 'static', content: 'Wohnassistenz (ASS-W)', fontSize: 12, fontStyle: 'bold', color: '#10b981' },
-            { id: 'title', label: 'Protokoll Titel', x: 105, y: 35, visible: true, type: 'static', content: 'Assistenzprotokoll/UB', fontSize: 14, fontStyle: 'bold' },
-            { id: 'lh_mobile', label: 'Mobile Dienste', x: 14, y: 45, visible: true, type: 'static', content: 'MOBILE DIENSTE', fontSize: 11 },
-            
-            // Header Table (Right Aligned Boxes)
-            { id: 'kunde', label: 'Kunde/in: ', x: 110, y: 15, visible: true, type: 'data', fontSize: 10 },
-            { id: 'adresse', label: 'Adresse: ', x: 110, y: 25, visible: true, type: 'data', fontSize: 10 },
-            { id: 'assistent', label: 'Betreuer/in: ', x: 110, y: 35, visible: true, type: 'data', fontSize: 10 },
-            { id: 'month', label: 'Monat: ', x: 110, y: 45, visible: true, type: 'data', fontSize: 10 },
-            { id: 'year', label: 'Jahr: ', x: 170, y: 45, visible: true, type: 'data', fontSize: 10 },
-            
-            // Middle Lines
-            { id: 'lh_line1', label: 'Line 1', x: 14, y: 55, visible: true, type: 'static', content: '________________________________________________________________________________________________________________', fontSize: 8 },
-            { id: 'lh_foerderziel', label: 'Förderziel:', x: 14, y: 62, visible: true, type: 'static', content: 'Förderziel:', fontSize: 10 },
-            { id: 'lh_line2', label: 'Line 2', x: 14, y: 72, visible: true, type: 'static', content: '________________________________________________________________________________________________________________', fontSize: 8 },
-            { id: 'lh_assistenzinhalt', label: 'Assistenzinhalt:', x: 14, y: 79, visible: true, type: 'static', content: 'Assistenzinhalt:', fontSize: 10 },
-            { id: 'lh_line3', label: 'Line 3', x: 14, y: 125, visible: true, type: 'static', content: '________________________________________________________________________________________________________________', fontSize: 8 },
-            
-            // Footer Info (Fixed at bottom)
-            { id: 'lh_footer_sig1', label: 'Unterschrift Kunde/in:', x: 14, y: 260, visible: true, type: 'static', content: 'Unterschrift Kunde/in: _________________________________', fontSize: 9 },
-            { id: 'lh_footer_sig2', label: 'Unterschrift Betreuer/in:', x: 110, y: 260, visible: true, type: 'static', content: 'Unterschrift Betreuer/in: _________________________________', fontSize: 9 },
-            { id: 'lh_footer_info1', label: 'Legal 1', x: 105, y: 275, visible: true, type: 'static', content: 'Lebenshilfe Region Knittelfeld gem. GmbH / FN 535534a – LG Leoben / UID-Nr: ATU 75895514', fontSize: 7, fontStyle: 'normal' },
-            { id: 'lh_footer_info2', label: 'Legal 2', x: 105, y: 280, visible: true, type: 'static', content: 'Tel.: +43/(0)3512 74184; Fax: +43/(0)3512 74184-9; E-Mail: office@lebenshilfe-knittelfeld.at', fontSize: 7 },
-            { id: 'lh_footer_info3', label: 'Legal 3', x: 105, y: 285, visible: true, type: 'static', content: 'Raiba Aichfeld, IBAN: AT84 3834 6000 0020 6334, BIC: RZSTAT2G346', fontSize: 7 },
-          ];
-
-          if (count === 0) {
-            await db.templates.bulkAdd([
-              {
-                name: 'Lebenshilfe Protocol',
-                title: 'Assistenzprotokoll/UB',
-                fields: lebenshilfeFields,
-                primaryColor: '#10b981',
-                fontSize: 9,
-                tableY: 135
-              },
-              {
-                name: 'Standard Protocol',
-                title: 'ASSISTENZPROTOKOLL',
-                fields: defaultFields,
-                primaryColor: '#c8c8c8',
-                fontSize: 8,
-                tableY: 80
-              },
-              {
-                name: 'Compact Travel Info',
-                title: 'FAHRTEN-PROTOKOLL',
-                fields: defaultFields.map(f => {
-                  if (['anfahrtFrom', 'abfahrtTo', 'driveTimeMinutes', 'km'].includes(f.id)) return { ...f, visible: true };
-                  if (['dienstleistung', 'assistent', 'adresse'].includes(f.id)) return { ...f, visible: false };
-                  return f;
-                }),
-                primaryColor: '#c8dcff',
-                fontSize: 7,
-                tableY: 80
-              }
-            ]);
-            // Set default template setting
-            const activeTemplate = await db.settings.get('activeTemplateId');
-            if (!activeTemplate) {
-              const first = await db.templates.filter(t => t.name === 'Lebenshilfe Protocol').first();
-              if (first) {
-                await db.settings.put({ key: 'activeTemplateId', value: first.id });
-              }
-            }
-          }
+        const gasSettings = await db.settings.get('gasoline');
+        if (!gasSettings) {
+          await db.settings.put({ key: 'gasoline', value: { consumption: 7, price: 1.60 } });
+        }
       } catch (error) {
-        console.error("Failed to seed templates:", error);
+        console.error("Failed to init settings:", error);
       }
     };
-    seedTemplates();
+    checkSettings();
   }, []);
 
   const customers = useLiveQuery(() => db.customers.toArray());
-  const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
-
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -168,8 +85,7 @@ export default function App() {
         <nav className="flex-1 px-4 space-y-2">
           <NavItem icon={<Calendar />} label="Daily Logs" active={activeView === 'logs'} onClick={() => setActiveView('logs')} />
           <NavItem icon={<User />} label="Customers" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
-          <NavItem icon={<Palette />} label="Templates" active={activeView === 'templates'} onClick={() => setActiveView('templates')} />
-          <NavItem icon={<FileText />} label="PDF Templates" active={activeView === 'pdfTemplates'} onClick={() => setActiveView('pdfTemplates')} />
+          <NavItem icon={<FileText />} label="Templates" active={activeView === 'pdfTemplates'} onClick={() => setActiveView('pdfTemplates')} />
           <NavItem icon={<BarChart />} label="Statistics" active={activeView === 'stats'} onClick={() => setActiveView('stats')} />
           <NavItem icon={<History />} label="Change Log" active={activeView === 'history'} onClick={() => setActiveView('history')} />
           <NavItem icon={<Settings />} label="Settings" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
@@ -208,7 +124,6 @@ export default function App() {
         {activeView === 'stats' && <StatsView month={selectedMonth} />}
         {activeView === 'history' && <HistoryView />}
         {activeView === 'settings' && <SettingsView />}
-        {activeView === 'templates' && <TemplatesView />}
         {activeView === 'pdfTemplates' && <PDFTemplatesView />}
       </main>
     </div>
@@ -367,33 +282,37 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     }
   };
 
-  const generatePDF = async () => {
+  const generatePDF = async (scope: 'selected' | 'month' = 'selected') => {
     if (!customer || !logs) return;
 
-    // Get active template settings
-    const activeTemplateSetting = await db.settings.get('activeTemplateId');
     const activePdfTemplateSetting = await db.settings.get('activePdfTemplateId');
-
     const pdfTemplateId = activePdfTemplateSetting?.value;
-    const templateId = activeTemplateSetting?.value;
-
     const pdfTemplate = pdfTemplateId ? await db.pdfTemplates.get(pdfTemplateId) : null;
-    const template = templateId ? await db.templates.get(templateId) : null;
+    if (!pdfTemplate) {
+      alert('Please select an active PDF template in Settings before exporting.');
+      return;
+    }
 
-    const targetDays = days.filter(d => selectedDayStrings.includes(format(d, 'yyyy-MM-dd')));
-    if (targetDays.length === 0) {
-      alert("Please select at least one day to export.");
+    const selectedDateSet = new Set(selectedDayStrings);
+    const exportEntries = days
+      .map((day) => {
+        const date = format(day, 'yyyy-MM-dd');
+        return { day, date, log: logs.find((l) => l.date === date) };
+      })
+      .filter((entry) => {
+        if (!entry.log) return false;
+        return scope === 'month' ? true : selectedDateSet.has(entry.date);
+      });
+
+    if (exportEntries.length === 0) {
+      alert(scope === 'month' ? 'No saved logs found for this month.' : 'Please select at least one saved day to export.');
       return;
     }
 
     const [yearStr, monthStr] = month.split('-');
-    const totalKm = targetDays.length * customer.km;
-    const totalWorkMinutes = targetDays.reduce((acc, day) => {
-      const log = logs.find(l => l.date === format(day, 'yyyy-MM-dd'));
-      return acc + (log?.timeWithCustomerMinutes || 0);
-    }, 0);
-
-    const totalDriveMinutes = targetDays.length * customer.driveTimeMinutes;
+    const totalKm = exportEntries.reduce((acc, entry) => acc + (entry.log?.km || customer.km || 0), 0);
+    const totalWorkMinutes = exportEntries.reduce((acc, entry) => acc + (entry.log?.timeWithCustomerMinutes || 0), 0);
+    const totalDriveMinutes = exportEntries.reduce((acc, entry) => acc + (entry.log?.traveltime || customer.driveTimeMinutes || 0), 0);
     const gasSettings = await db.settings.get('gasoline');
     const fuelPrice = gasSettings?.value?.price || 0;
     const fuelConsumption = gasSettings?.value?.consumption || 0;
@@ -418,8 +337,7 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     };
 
     // Add daily log mappings for pdf-lib templates
-    targetDays.forEach((day, index) => {
-      const log = logs.find(l => l.date === format(day, 'yyyy-MM-dd'));
+    exportEntries.forEach(({ day, log }, index) => {
       if (log) {
         const i = index + 1;
         dataMap[`date_${i}`] = format(day, 'dd.MM.yyyy');
@@ -451,226 +369,99 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       }
     });
 
-    if (pdfTemplate) {
-      // PDF-LIB implementation
+    // PDF-LIB implementation only (legacy jsPDF template flow removed)
+    try {
+      const existingPdfBytes = await fetch(pdfTemplate.pdfBase64).then(res => res.arrayBuffer());
+      const pdfDoc = await PDFDocument.load(existingPdfBytes, { ignoreEncryption: true });
+      const form = pdfDoc.getForm();
+
       try {
-        const existingPdfBytes = await fetch(pdfTemplate.pdfBase64).then(res => res.arrayBuffer());
-        const pdfDoc = await PDFDocument.load(existingPdfBytes, { ignoreEncryption: true });
-        const form = pdfDoc.getForm();
+        // @ts-ignore
+        if (typeof form.updateFieldAppearances === 'function') {
+          // @ts-ignore
+          form.updateFieldAppearances();
+        }
+      } catch (e) {}
 
-        // Support for appearance updates if fields aren't showing up after fill
+      pdfTemplate.fieldMappings.forEach(m => {
+        const value = dataMap[m.dataSource] || '';
+        const fieldName = m.placeholder.replace('{{', '').replace('}}', '');
         try {
-           // @ts-ignore
-           if (typeof form.updateFieldAppearances === 'function') {
-             // @ts-ignore
-             form.updateFieldAppearances();
-           }
-        } catch(e) {}
-        
-        pdfTemplate.fieldMappings.forEach(m => {
-          const value = dataMap[m.dataSource] || '';
-          const fieldName = m.placeholder.replace('{{', '').replace('}}', '');
-          try {
-            // Check if it's a form field first
-            const field = form.getTextField(fieldName);
-            field.setText(value);
-          } catch (e) {
-             // Fallback for non-standard fields (like annotations we found)
-             const pages = pdfDoc.getPages();
-             let handled = false;
-             pages.forEach(page => {
-               const annots = page.node.Annots();
-               if (annots) {
-                 annots.asArray().forEach(ref => {
-                   const annot = pdfDoc.context.lookup(ref);
-                   if (annot instanceof PDFDict) {
-                     const title = annot.get(PDFName.of('T'));
-                     const contents = annot.get(PDFName.of('Contents'));
-                     let name = '';
-                     if (title instanceof PDFString || title instanceof PDFHexString) name = title.decodeText();
-                     if ((!name || name === 'ramboo') && (contents instanceof PDFString || contents instanceof PDFHexString)) name = contents.decodeText();
+          const field = form.getTextField(fieldName);
+          field.setText(value);
+        } catch (e) {
+          const pages = pdfDoc.getPages();
+          let handled = false;
+          pages.forEach(page => {
+            const annots = page.node.Annots();
+            if (annots) {
+              annots.asArray().forEach(ref => {
+                const annot = pdfDoc.context.lookup(ref);
+                if (annot instanceof PDFDict) {
+                  const title = annot.get(PDFName.of('T'));
+                  const contents = annot.get(PDFName.of('Contents'));
+                  let name = '';
+                  if (title instanceof PDFString || title instanceof PDFHexString) name = title.decodeText();
+                  if ((!name || name === 'ramboo') && (contents instanceof PDFString || contents instanceof PDFHexString)) name = contents.decodeText();
 
-                     // Clean name for comparison (remove {{}} if user mapped it that way)
-                     const cleanName = name.replace('{{', '').replace('}}', '');
-                     if (name === fieldName || cleanName === fieldName) {
-                       annot.set(PDFName.of('Contents'), PDFString.of(value));
-                       handled = true;
-                     }
-                   }
-                 });
-               }
-             });
-
-             if (!handled) {
-                try {
-                  const allFields = form.getFields();
-                  const match = allFields.find(f => f.getName().toLowerCase().includes(fieldName.toLowerCase()));
-                  if (match && 'setText' in match) {
-                    (match as any).setText(value);
+                  const cleanName = name.replace('{{', '').replace('}}', '');
+                  if (name === fieldName || cleanName === fieldName) {
+                    annot.set(PDFName.of('Contents'), PDFString.of(value));
+                    handled = true;
                   }
-                } catch (inner) {}
-             }
-          }
-        });
-
-        // Add support for data rows if user named fields like "date_1", "activity_1", etc.
-        targetDays.forEach((day, idx) => {
-          const rowIdx = idx + 1;
-          const dateStr = format(day, 'yyyy-MM-dd');
-          const log = logs.find(l => l.date === dateStr);
-          if (!log) return;
-
-          const rowData: Record<string, string> = {
-            [`date_${rowIdx}`]: format(day, 'dd.MM.yyyy'),
-            [`goal_${rowIdx}`]: log.foerderziel,
-            [`content_${rowIdx}`]: log.assistenzinhalt,
-            [`start_${rowIdx}`]: log.startTime,
-            [`end_${rowIdx}`]: log.endTime,
-            [`duration_${rowIdx}`]: String(log.timeWithCustomerMinutes),
-          };
-
-          Object.entries(rowData).forEach(([fieldName, val]) => {
-            try {
-              const field = form.getTextField(fieldName);
-              field.setText(val);
-            } catch (e) {}
-          });
-        });
-
-        // Flatten form so it's not editable
-        form.flatten();
-
-        const pdfBytes = await pdfDoc.save();
-        const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `${customer.kunde}_${month}.pdf`;
-        link.click();
-        return; // Skip jsPDF logic for now if PDF Template is used
-      } catch (err) {
-        console.error("PDF-LIB error:", err);
-        alert("Failed to generate PDF from base template. Falling back to standard template.");
-      }
-    }
-
-    // Standard jsPDF logic (existing)
-    const doc = new jsPDF();
-    const primaryColor = template?.primaryColor || '#c8c8c8';
-    const defaultFontSize = template?.fontSize || 8;
-
-    if (template?.fields) {
-      const sortedFields = [...template.fields]
-        .filter(f => f.visible)
-        .sort((a, b) => (a.zOrder || 0) - (b.zOrder || 0));
-
-      sortedFields.forEach(field => {
-        const fieldFontSize = field.fontSize || defaultFontSize;
-        const fieldFontStyle = field.fontStyle || 'normal';
-        const fieldColor = field.color || '#000000';
-
-        doc.setFontSize(fieldFontSize);
-        doc.setFont('helvetica', fieldFontStyle);
-        doc.setTextColor(fieldColor);
-
-        if (field.type === 'image' && field.content) {
-          try {
-            const w = field.width || 30;
-            const h = field.height || 30;
-            doc.addImage(field.content, 'PNG', field.x, field.y, w, h);
-          } catch (e) {
-            console.error("Failed to add image to PDF", e);
-          }
-        } else {
-          let value = '';
-          if (field.type === 'static') {
-            value = field.content || '';
-          } else {
-            // Data fields
-            const [yearStr, monthStr] = month.split('-');
-            switch(field.id) {
-              case 'dienstleistung': value = customer.dienstleistung; break;
-              case 'kunde': value = customer.kunde; break;
-              case 'assistent': value = customer.assistent; break;
-              case 'adresse': value = customer.adresse; break;
-              case 'anfahrtFrom': value = customer.anfahrtFrom; break;
-              case 'abfahrtTo': value = customer.abfahrtTo; break;
-              case 'driveTimeMinutes': value = `${customer.driveTimeMinutes} min`; break;
-              case 'km': value = `${customer.km} km`; break;
-              case 'month': value = monthStr; break;
-              case 'year': value = yearStr; break;
-              case 'title': value = field.content || template.title || 'ASSISTENZPROTOKOLL'; break;
-              default: value = '';
+                }
+              });
             }
-          }
-          
-          if (field.id === 'title') {
-             doc.text(value, field.x, field.y, { align: 'center' });
-          } else {
-             const label = field.label ? field.label : '';
-             doc.text(field.type === 'static' ? value : `${label}${value}`, field.x, field.y);
+          });
+
+          if (!handled) {
+            try {
+              const allFields = form.getFields();
+              const match = allFields.find(f => f.getName().toLowerCase().includes(fieldName.toLowerCase()));
+              if (match && 'setText' in match) {
+                (match as any).setText(value);
+              }
+            } catch (inner) {}
           }
         }
       });
-    } else {
-      // Fallback to legacy
-      doc.setFontSize(18);
-      doc.text(template?.title || 'ASSISTENZPROTOKOLL', 105, 20, { align: 'center' });
-      doc.setFontSize(10);
-      let y = 30;
-      doc.text(`Dienstleistung: ${customer.dienstleistung}`, 14, y); y += 5;
-      doc.text(`Kunde: ${customer.kunde}`, 14, y); y += 5;
-      doc.text(`Assistent: ${customer.assistent}`, 14, y); y += 5;
-      doc.text(`Adresse: ${customer.adresse}`, 14, y); y += 5;
-      doc.text(`Monat: ${month}`, 14, y); y += 10;
+
+      exportEntries.forEach(({ day, log }, idx) => {
+        const rowIdx = idx + 1;
+        const rowData: Record<string, string> = {
+          [`date_${rowIdx}`]: format(day, 'dd.MM.yyyy'),
+          [`goal_${rowIdx}`]: log?.foerderziel || '',
+          [`content_${rowIdx}`]: log?.assistenzinhalt || '',
+          [`start_${rowIdx}`]: log?.startTime || '',
+          [`end_${rowIdx}`]: log?.endTime || '',
+          [`duration_${rowIdx}`]: String(log?.timeWithCustomerMinutes || 0),
+        };
+
+        Object.entries(rowData).forEach(([fieldName, val]) => {
+          try {
+            const field = form.getTextField(fieldName);
+            field.setText(val);
+          } catch (e) {}
+        });
+      });
+
+      form.flatten();
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${customer.kunde}_${month}_${scope}.pdf`;
+      link.click();
+    } catch (err) {
+      console.error('PDF-LIB error:', err);
+      alert('Failed to generate PDF from base template.');
     }
-
-    // Reset styles for table
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
-
-    const startY = template?.tableY || 80;
-
-    const exportDays = days.filter(d => selectedDayStrings.includes(format(d, 'yyyy-MM-dd')));
-
-    if (exportDays.length === 0) {
-      alert("Please select at least one day to export.");
-      return;
-    }
-
-    const tableData = exportDays.map(day => {
-      const dateStr = format(day, 'yyyy-MM-dd');
-      const log = logs.find(l => l.date === dateStr);
-      return [
-        format(day, 'dd.MM.yyyy'),
-        log?.foerderziel || '-',
-        log?.assistenzinhalt || '-',
-        log?.startTime || '-',
-        log?.endTime || '-',
-        log?.timeWithCustomerMinutes || '0'
-      ];
-    });
-
-    autoTable(doc, {
-      startY: startY,
-      head: [['Datum', 'Förderziel', 'Assistenzinhalt', 'Beginn', 'Ende', 'Zeit (min)']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: primaryColor as any, textColor: 0, halign: 'center' },
-      styles: { fontSize: defaultFontSize, cellPadding: 1 },
-      columnStyles: {
-        0: { cellWidth: 20 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 80 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 15 },
-        5: { cellWidth: 15 },
-      }
-    });
-
-    doc.save(`${template?.title || 'ASSISTENZPROTOKOLL'}_${customer.kunde}_${month}.pdf`);
   };
 
   if (!customerId) return <div className="text-center p-12 bg-white rounded-xl border">Please select a customer to view logs.</div>;
+
+  const monthLogCount = logs?.length || 0;
 
   return (
     <div className="space-y-6">
@@ -729,8 +520,11 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
              >
                Clear
              </button>
-             <button onClick={generatePDF} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2">
-               <FileText size={18} /> Export PDF ({selectedDayStrings.length})
+              <button onClick={() => generatePDF('selected')} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2">
+                <FileText size={18} /> Export Selected ({selectedDayStrings.length})
+              </button>
+              <button onClick={() => generatePDF('month')} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700">
+                <FileText size={18} /> Export Month ({monthLogCount})
              </button>
            </div>
         </div>
@@ -1181,29 +975,22 @@ function StatsView({ month }: { month: string }) {
 function SettingsView() {
   const fuelConsumption = useLiveQuery(() => db.settings.get('fuelConsumption'));
   const fuelPrice = useLiveQuery(() => db.settings.get('fuelPrice'));
-  const activeTemplateId = useLiveQuery(() => db.settings.get('activeTemplateId'));
   const activePdfTemplateId = useLiveQuery(() => db.settings.get('activePdfTemplateId'));
-  const templates = useLiveQuery(() => db.templates.toArray()) || [];
   const pdfTemplates = useLiveQuery(() => db.pdfTemplates.toArray()) || [];
 
   const [consumption, setConsumption] = useState('');
   const [price, setPrice] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
   const [selectedPdfTemplateId, setSelectedPdfTemplateId] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (fuelConsumption) setConsumption(String(fuelConsumption.value));
     if (fuelPrice) setPrice(String(fuelPrice.value));
-    if (activeTemplateId) setSelectedTemplateId(activeTemplateId.value);
     if (activePdfTemplateId) setSelectedPdfTemplateId(activePdfTemplateId.value);
-  }, [fuelConsumption, fuelPrice, activeTemplateId, activePdfTemplateId]);
+  }, [fuelConsumption, fuelPrice, activePdfTemplateId]);
 
   const handleSave = async () => {
     await db.settings.put({ key: 'fuelConsumption', value: Number(consumption) });
     await db.settings.put({ key: 'fuelPrice', value: Number(price) });
-    if (selectedTemplateId) {
-      await db.settings.put({ key: 'activeTemplateId', value: Number(selectedTemplateId) });
-    }
     if (selectedPdfTemplateId) {
       await db.settings.put({ key: 'activePdfTemplateId', value: Number(selectedPdfTemplateId) });
     } else {
@@ -1220,17 +1007,6 @@ function SettingsView() {
           General Configuration
         </h3>
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Active Print Template</label>
-            <select 
-              className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
-              value={selectedTemplateId || ''}
-              onChange={e => setSelectedTemplateId(Number(e.target.value))}
-            >
-              <option value="">Select Template</option>
-              {templates?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Consumption (Liters / 100km)</label>
             <input 
@@ -1256,26 +1032,13 @@ function SettingsView() {
           <div className="space-y-4 pt-4 border-t">
             <h4 className="font-semibold text-gray-900">PDF Generation</h4>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Standard Template</label>
-              <select 
-                className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                value={selectedTemplateId || ''}
-                onChange={(e) => setSelectedTemplateId(e.target.value ? Number(e.target.value) : undefined)}
-              >
-                <option value="">Select a template...</option>
-                {templates.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Base PDF Template (Overrides Standard)</label>
-              <select 
+              <label className="block text-sm font-medium text-gray-700 mb-1">Active PDF Template</label>
+              <select
                 className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={selectedPdfTemplateId || ''}
                 onChange={(e) => setSelectedPdfTemplateId(e.target.value ? Number(e.target.value) : undefined)}
               >
-                <option value="">None (Use Standard Template)</option>
+                <option value="">Select a template...</option>
                 {pdfTemplates.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
@@ -1393,7 +1156,6 @@ function PDFTemplatesView() {
                 annots.asArray().forEach(ref => {
                   const annot = pdfDoc.context.lookup(ref);
                   if (annot instanceof PDFDict) {
-                    const st = annot.get(PDFName.of('Subtype'));
                     const title = annot.get(PDFName.of('T'));
                     const contents = annot.get(PDFName.of('Contents'));
                     
@@ -1508,7 +1270,7 @@ function PDFTemplatesView() {
         // Check annotations (Widgets, Links, etc.)
         const annots = page.node.Annots();
         if (annots) {
-          annots.asArray().forEach((annotRef, i) => {
+          annots.asArray().forEach((annotRef) => {
             const annot = pdfDoc.context.lookup(annotRef);
             if (annot instanceof PDFDict) {
               const type = annot.get(PDFName.of('Type'))?.toString() || 'Unknown';
@@ -1868,365 +1630,6 @@ function PDFTemplatesView() {
                 )}
               </div>
             )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TemplatesView() {
-  const templates = useLiveQuery(() => db.templates.toArray()) || [];
-  const [editingId, setEditingId] = useState<number | null>(null);
-  
-  const initialFields: TemplateField[] = [
-    { id: 'title', label: 'Protokoll Titel', x: 105, y: 20, visible: true, type: 'static', content: 'ASSISTENZPROTOKOLL', fontSize: 18, fontStyle: 'bold', color: '#000000', width: 210, zOrder: 0 },
-    { id: 'dienstleistung', label: 'Dienstleistung: ', x: 14, y: 30, visible: true, type: 'data', color: '#000000', zOrder: 1 },
-    { id: 'kunde', label: 'Kunde: ', x: 14, y: 35, visible: true, type: 'data', color: '#000000', zOrder: 2 },
-    { id: 'assistent', label: 'Assistent: ', x: 14, y: 40, visible: true, type: 'data', color: '#000000', zOrder: 3 },
-    { id: 'adresse', label: 'Adresse: ', x: 14, y: 45, visible: true, type: 'data', color: '#000000', zOrder: 4 },
-    { id: 'anfahrtFrom', label: 'Anfahrt von: ', x: 14, y: 50, visible: false, type: 'data', color: '#000000', zOrder: 5 },
-    { id: 'abfahrtTo', label: 'Abfahrt zu: ', x: 14, y: 55, visible: false, type: 'data', color: '#000000', zOrder: 6 },
-    { id: 'driveTimeMinutes', label: 'Fahrtzeit: ', x: 14, y: 60, visible: false, type: 'data', color: '#000000', zOrder: 7 },
-    { id: 'km', label: 'Kilometer: ', x: 14, y: 65, visible: false, type: 'data', color: '#000000', zOrder: 8 },
-    { id: 'month', label: 'Monat: ', x: 14, y: 70, visible: true, type: 'data', color: '#000000', zOrder: 9 },
-  ];
-
-  const [formData, setFormData] = useState<Partial<Template>>({
-    name: '',
-    title: '',
-    fields: initialFields,
-    primaryColor: '#c8c8c8',
-    fontSize: 8,
-    tableY: 80
-  });
-
-  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
-  const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
-
-  const handleSave = async () => {
-    if (!formData.name) return;
-    const data = { ...formData } as Template;
-    if (editingId) {
-      const { id, ...updateData } = data;
-      await db.templates.update(editingId, updateData);
-    } else {
-      await db.templates.add(data);
-    }
-    setEditingId(null);
-    setFormData({
-      name: '',
-      title: '',
-      fields: initialFields,
-      primaryColor: '#c8c8c8',
-      fontSize: 8,
-      tableY: 80
-    });
-  };
-
-  const handleApplyPreset = (preset: 'standard' | 'lebenshilfe') => {
-    const lebenshilfeFields: TemplateField[] = [
-      // Top Section
-      { id: 'lh_logo_box', label: 'Logo', x: 14, y: 10, visible: true, type: 'static', content: 'lebenshilfe', fontSize: 14, fontStyle: 'bold', color: '#10b981', width: 40, height: 15, zOrder: 1 },
-      { id: 'lh_region', label: 'Region', x: 14, y: 25, visible: true, type: 'static', content: 'Region Knittelfeld', fontSize: 10, fontStyle: 'bold', color: '#7c2d12', zOrder: 2 },
-      { id: 'lh_wohnassistenz', label: 'Wohnassistenz', x: 105, y: 15, visible: true, type: 'static', content: 'Wohnassistenz (ASS-W)', fontSize: 12, fontStyle: 'bold', color: '#10b981', zOrder: 3 },
-      { id: 'title', label: 'Protokoll Titel', x: 105, y: 35, visible: true, type: 'static', content: 'Assistenzprotokoll/UB', fontSize: 14, fontStyle: 'bold', zOrder: 4 },
-      { id: 'lh_mobile', label: 'Mobile Dienste', x: 14, y: 45, visible: true, type: 'static', content: 'MOBILE DIENSTE', fontSize: 11, zOrder: 5 },
-      
-      // Header Table (Right Aligned Boxes)
-      { id: 'kunde', label: 'Kunde/in: ', x: 110, y: 15, visible: true, type: 'data', fontSize: 10, zOrder: 6 },
-      { id: 'adresse', label: 'Adresse: ', x: 110, y: 25, visible: true, type: 'data', fontSize: 10, zOrder: 7 },
-      { id: 'assistent', label: 'Betreuer/in: ', x: 110, y: 35, visible: true, type: 'data', fontSize: 10, zOrder: 8 },
-      { id: 'month', label: 'Monat: ', x: 110, y: 45, visible: true, type: 'data', fontSize: 10, zOrder: 9 },
-      { id: 'year', label: 'Jahr: ', x: 170, y: 45, visible: true, type: 'data', fontSize: 10, zOrder: 10 },
-      
-      // Middle Lines
-      { id: 'lh_line1', label: 'Line 1', x: 14, y: 55, visible: true, type: 'static', content: '________________________________________________________________________________________________________________', fontSize: 8, zOrder: 11 },
-      { id: 'lh_foerderziel', label: 'Förderziel:', x: 14, y: 62, visible: true, type: 'static', content: 'Förderziel:', fontSize: 10, zOrder: 12 },
-      { id: 'lh_line2', label: 'Line 2', x: 14, y: 72, visible: true, type: 'static', content: '________________________________________________________________________________________________________________', fontSize: 8, zOrder: 13 },
-      { id: 'lh_assistenzinhalt', label: 'Assistenzinhalt:', x: 14, y: 79, visible: true, type: 'static', content: 'Assistenzinhalt:', fontSize: 10, zOrder: 14 },
-      { id: 'lh_line3', label: 'Line 3', x: 14, y: 125, visible: true, type: 'static', content: '________________________________________________________________________________________________________________', fontSize: 8, zOrder: 15 },
-      
-      // Footer Info (Fixed at bottom)
-      { id: 'lh_footer_sig1', label: 'Unterschrift Kunde/in:', x: 14, y: 260, visible: true, type: 'static', content: 'Unterschrift Kunde/in: _________________________________', fontSize: 9, zOrder: 16 },
-      { id: 'lh_footer_sig2', label: 'Unterschrift Betreuer/in:', x: 110, y: 260, visible: true, type: 'static', content: 'Unterschrift Betreuer/in: _________________________________', fontSize: 9, zOrder: 17 },
-      { id: 'lh_footer_info1', label: 'Legal 1', x: 105, y: 275, visible: true, type: 'static', content: 'Lebenshilfe Region Knittelfeld gem. GmbH / FN 535534a – LG Leoben / UID-Nr: ATU 75895514', fontSize: 7, fontStyle: 'normal', zOrder: 18 },
-      { id: 'lh_footer_info2', label: 'Legal 2', x: 105, y: 280, visible: true, type: 'static', content: 'Tel.: +43/(0)3512 74184; Fax: +43/(0)3512 74184-9; E-Mail: office@lebenshilfe-knittelfeld.at', fontSize: 7, zOrder: 19 },
-      { id: 'lh_footer_info3', label: 'Legal 3', x: 105, y: 285, visible: true, type: 'static', content: 'Raiba Aichfeld, IBAN: AT84 3834 6000 0020 6334, BIC: RZSTAT2G346', fontSize: 7, zOrder: 20 },
-    ];
-
-    if (preset === 'lebenshilfe') {
-      setFormData({
-        name: 'My Lebenshilfe Protocol',
-        title: 'Assistenzprotokoll/UB',
-        fields: lebenshilfeFields,
-        primaryColor: '#10b981',
-        fontSize: 9,
-        tableY: 135
-      });
-    } else {
-      setFormData({
-        name: 'New Standard Template',
-        title: 'ASSISTENZPROTOKOLL',
-        fields: initialFields,
-        primaryColor: '#c8c8c8',
-        fontSize: 8,
-        tableY: 80
-      });
-    }
-  };
-
-  const updateField = (id: string, updates: Partial<TemplateField>) => {
-    setFormData(prev => ({
-      ...prev,
-      fields: prev.fields?.map(f => f.id === id ? { ...f, ...updates } : f)
-    }));
-  };
-
-  const addField = (type: 'static' | 'image') => {
-    const id = `${type}_${Date.now()}`;
-    const newField: TemplateField = {
-      id,
-      label: type === 'static' ? 'New Text' : 'New Image',
-      x: 50,
-      y: 50,
-      visible: true,
-      type,
-      content: type === 'static' ? 'Your Text Here' : '',
-      color: '#000000',
-      width: type === 'image' ? 30 : undefined,
-      height: type === 'image' ? 30 : undefined,
-      zOrder: (formData.fields?.length || 0) + 10,
-    };
-    setFormData(prev => ({
-      ...prev,
-      fields: [...(prev.fields || []), newField]
-    }));
-    setExpandedFieldId(id);
-  };
-
-  const removeField = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      fields: prev.fields?.filter(f => f.id !== id)
-    }));
-  };
-
-  const handleImageUpload = (id: string, file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      updateField(id, { content: reader.result as string });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-gray-900">{editingId ? 'Edit Template' : 'Create New Template'}</h3>
-          <div className="flex gap-2">
-            <button onClick={() => handleApplyPreset('standard')} className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium border transition-colors">Apply Standard Preset</button>
-            <button onClick={() => handleApplyPreset('lebenshilfe')} className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg font-medium border border-emerald-200 transition-colors">Apply Lebenshilfe Preset</button>
-          </div>
-        </div>
-        <p className="text-sm text-gray-500 mb-6">Create and position fields for your PDF protocol. Drag items on the visual editor to move them.</p>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-               <input className="border rounded p-2 bg-white text-gray-900" placeholder="Template Name" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-               <input className="border rounded p-2 bg-white text-gray-900" placeholder="Protocol Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
-            </div>
-
-            <div className="space-y-2 border rounded p-4 bg-gray-50 max-h-96 overflow-y-auto">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm text-gray-700 uppercase">Field Configuration</h4>
-                <div className="flex gap-1">
-                  <button onClick={() => addField('static')} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded">Add Text</button>
-                  <button onClick={() => addField('image')} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded">Add Image</button>
-                </div>
-              </div>
-              {formData.fields?.map(field => (
-                <div key={field.id} className="bg-white p-2 rounded border shadow-sm space-y-2">
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" checked={field.visible} onChange={e => updateField(field.id, { visible: e.target.checked })} />
-                    <span className="text-sm font-medium flex-1 text-gray-900 cursor-pointer overflow-hidden whitespace-nowrap text-ellipsis" onClick={() => setExpandedFieldId(expandedFieldId === field.id ? null : field.id)}>
-                      {field.label} {field.type && <span className="text-[10px] bg-gray-100 px-1 rounded text-gray-400">{field.type}</span>}
-                    </span>
-                    <div className="flex gap-1 items-center flex-shrink-0">
-                      <span className="text-[10px] text-gray-500">X:</span>
-                      <input type="number" className="w-10 border rounded p-1 text-[10px] bg-white text-gray-900" value={field.x} onChange={e => updateField(field.id, { x: Number(e.target.value) })} />
-                      <span className="text-[10px] text-gray-500">Y:</span>
-                      <input type="number" className="w-10 border rounded p-1 text-[10px] bg-white text-gray-900" value={field.y} onChange={e => updateField(field.id, { y: Number(e.target.value) })} />
-                      <span className="text-[10px] text-gray-500">Z:</span>
-                      <input type="number" className="w-10 border rounded p-1 text-[10px] bg-white text-gray-900" value={field.zOrder || 0} onChange={e => updateField(field.id, { zOrder: Number(e.target.value) })} />
-                      {field.id.includes('_') && <button onClick={() => removeField(field.id)} className="text-red-500 p-1"><Trash2 size={12} /></button>}
-                    </div>
-                  </div>
-                  
-                  {expandedFieldId === field.id && (
-                    <div className="p-2 bg-gray-50 rounded border-t space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Label</label>
-                          <input className="w-full border rounded p-1 text-xs" value={field.label} onChange={e => updateField(field.id, { label: e.target.value })} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Font Size</label>
-                          <input type="number" className="w-full border rounded p-1 text-xs" value={field.fontSize || ''} placeholder="Default" onChange={e => updateField(field.id, { fontSize: Number(e.target.value) })} />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Font Style</label>
-                          <select className="w-full border rounded p-1 text-xs" value={field.fontStyle || 'normal'} onChange={e => updateField(field.id, { fontStyle: e.target.value as any })}>
-                            <option value="normal">Normal</option>
-                            <option value="bold">Bold</option>
-                            <option value="italic">Italic</option>
-                            <option value="bolditalic">Bold Italic</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Text Color</label>
-                          <input type="color" className="w-full h-8 border rounded p-1" value={field.color || '#000000'} onChange={e => updateField(field.id, { color: e.target.value })} />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Width (mm)</label>
-                          <input type="number" className="w-full border rounded p-1 text-xs" value={field.width || ''} placeholder="Auto" onChange={e => updateField(field.id, { width: Number(e.target.value) })} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Height (mm)</label>
-                          <input type="number" className="w-full border rounded p-1 text-xs" value={field.height || ''} placeholder="Auto" onChange={e => updateField(field.id, { height: Number(e.target.value) })} />
-                        </div>
-                      </div>
-
-                      {(field.type === 'static' || field.id === 'title') && (
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Content</label>
-                          <textarea className="w-full border rounded p-1 text-xs" rows={2} value={field.content || ''} onChange={e => updateField(field.id, { content: e.target.value })} />
-                        </div>
-                      )}
-
-                      {field.type === 'image' && (
-                        <div>
-                          <label className="text-[10px] block font-bold text-gray-500">Image</label>
-                          <input type="file" accept="image/*" className="text-[10px] w-full" onChange={e => e.target.files?.[0] && handleImageUpload(field.id, e.target.files[0])} />
-                          {field.content && <img src={field.content} className="mt-1 h-12 object-contain border rounded p-1" alt="Preview" />}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-200 mt-4">
-                 <span className="text-sm font-bold text-blue-700 flex-1">Table Start Position (Y)</span>
-                 <input type="number" className="w-16 border rounded p-1 text-xs bg-white text-gray-900" value={formData.tableY || 80} onChange={e => setFormData({...formData, tableY: Number(e.target.value)})} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Theme Color</label>
-                 <input type="color" className="border rounded h-10 w-full p-1 bg-white" value={formData.primaryColor || '#c8c8c8'} onChange={e => setFormData({...formData, primaryColor: e.target.value})} />
-               </div>
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Font Size (pt)</label>
-                 <input type="number" className="border rounded p-1 w-full bg-white text-gray-900" value={formData.fontSize || 8} onChange={e => setFormData({...formData, fontSize: Number(e.target.value)})} />
-               </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col">
-            <h4 className="font-bold text-sm text-gray-500 uppercase mb-2 flex items-center gap-2">
-              <Move size={16} /> Visual Layout Editor (Draft)
-            </h4>
-            <div 
-              className="relative bg-white border-2 border-dashed border-gray-300 rounded-lg aspect-[1/1.4] w-full max-w-[400px] shadow-inner overflow-hidden cursor-crosshair mx-auto"
-              style={{ backgroundSize: '20px 20px', backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)' }}
-              onMouseMove={(e) => {
-                if (!draggedFieldId) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = Math.round(((e.clientX - rect.left) / rect.width) * 210);
-                const y = Math.round(((e.clientY - rect.top) / rect.height) * 297);
-                updateField(draggedFieldId, { x, y });
-              }}
-              onMouseUp={() => setDraggedFieldId(null)}
-              onMouseLeave={() => setDraggedFieldId(null)}
-            >
-              {/* PDF Header Title Placeholder (Removed - title is now a draggable field) */}
-              
-              {/* Draggable Fields */}
-              {formData.fields?.filter(f => f.visible).map(field => (
-                <div 
-                  key={field.id}
-                  className={`absolute p-1 border rounded text-[8px] whitespace-nowrap cursor-move select-none ${draggedFieldId === field.id ? 'bg-blue-100 border-blue-500 z-10' : 'bg-white border-gray-200 hover:border-blue-300'}`}
-                  style={{ 
-                    top: field.y !== undefined ? `${(field.y / 297) * 100}%` : '0%',
-                    transform: field.id === 'title' ? 'translate(-50%, -50%)' : 'translate(-5%, -50%)',
-                    fontSize: field.fontSize ? `${(field.fontSize / 297) * 100 * 3.5}px` : '8px',
-                    fontWeight: field.fontStyle?.includes('bold') ? 'bold' : 'normal',
-                    fontStyle: field.fontStyle?.includes('italic') ? 'italic' : 'normal',
-                    color: field.color || 'black',
-                    textAlign: field.id === 'title' ? 'center' : 'left',
-                    width: field.width ? `${(field.width / 210) * 100}%` : (field.id === 'title' ? '100%' : 'auto'),
-                    height: field.height ? `${(field.height / 297) * 100}%` : 'auto',
-                    left: field.id === 'title' ? '50%' : (field.x !== undefined ? `${(field.x / 210) * 100}%` : '0%'),
-                    overflow: 'hidden',
-                    zIndex: field.zOrder || 0,
-                  }}
-                  onMouseDown={() => setDraggedFieldId(field.id)}
-                >
-                  {field.type === 'image' && field.content ? (
-                    <img src={field.content} className="w-full h-full object-contain" alt="Logo" />
-                  ) : (
-                    <>
-                      {field.label && <span className="font-bold">{field.label}</span>}
-                      <span> {field.type === 'static' || field.id === 'title' ? field.content : '[Data]'}</span>
-                    </>
-                  )}
-                </div>
-              ))}
-
-              {/* Table Marker */}
-              <div 
-                className="absolute left-0 right-0 border-t-2 border-blue-400 border-dotted bg-blue-50 bg-opacity-20 flex items-center justify-center pointer-events-none"
-                style={{ top: `${((formData.tableY || 80) / 297) * 100}%`, bottom: 0 }}
-              >
-                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Protocol Table Area</span>
-              </div>
-            </div>
-            <p className="text-center text-xs text-gray-400 mt-2 italic">Drag fields to position them. 1 unit = 1mm on A4.</p>
-          </div>
-        </div>
-        
-        <div className="mt-8 pt-6 border-t flex gap-3">
-          <button onClick={handleSave} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md">
-            <Save size={20} /> Save Template
-          </button>
-          {editingId && <button onClick={() => {setEditingId(null); setFormData({name: '', title: '', fields: [], primaryColor: '#c8c8c8', fontSize: 8, tableY: 80});}} className="bg-gray-100 px-8 py-3 rounded-lg font-bold text-gray-600">Cancel</button>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {templates?.map(t => (
-          <div key={t.id} className="bg-white p-5 rounded-xl border shadow-sm flex justify-between items-center group hover:border-blue-200 transition-all">
-            <div className="flex items-center gap-4">
-               <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold" style={{ backgroundColor: t.primaryColor }}>
-                 {t.name.charAt(0)}
-               </div>
-               <div>
-                 <h4 className="font-bold text-gray-800">{t.name}</h4>
-                 <p className="text-xs text-gray-400">{t.fields?.filter(f => f.visible).length || 0} fields visible</p>
-               </div>
-            </div>
-            <div className="flex gap-1">
-              <button onClick={() => {setEditingId(t.id!); setFormData(t);}} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Plus size={18} /></button>
-              <button onClick={async () => { if(confirm('Delete template?')) await db.templates.delete(t.id!); }} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
-            </div>
           </div>
         ))}
       </div>
