@@ -2,12 +2,12 @@
 import { db, type Customer, type DailyLog } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
-import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar } from 'lucide-react';
+import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settings } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // --- Types ---
-type View = 'customers' | 'logs' | 'stats' | 'history';
+type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings';
 
 // --- Helper for Audit Logging ---
 async function logChange(entityType: 'customer' | 'log', entityId: number, action: 'create' | 'update' | 'delete', oldValue?: any, newValue?: any) {
@@ -32,7 +32,7 @@ function MonthPicker({ value, onChange }: { value: string, onChange: (val: strin
   return (
     <div className="flex gap-2">
       <select 
-        className="border rounded px-3 py-2 bg-white"
+        className="border rounded px-3 py-2 bg-white text-gray-900"
         value={month}
         onChange={(e) => onChange(`${year}-${String(e.target.value).padStart(2, '0')}`)}
       >
@@ -41,7 +41,7 @@ function MonthPicker({ value, onChange }: { value: string, onChange: (val: strin
         ))}
       </select>
       <select 
-        className="border rounded px-3 py-2 bg-white"
+        className="border rounded px-3 py-2 bg-white text-gray-900"
         value={year}
         onChange={(e) => onChange(`${e.target.value}-${String(month).padStart(2, '0')}`)}
       >
@@ -73,6 +73,7 @@ export default function App() {
           <NavItem icon={<User />} label="Customers" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
           <NavItem icon={<BarChart />} label="Statistics" active={activeView === 'stats'} onClick={() => setActiveView('stats')} />
           <NavItem icon={<History />} label="Change Log" active={activeView === 'history'} onClick={() => setActiveView('history')} />
+          <NavItem icon={<Settings />} label="Settings" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
         </nav>
       </aside>
 
@@ -86,7 +87,7 @@ export default function App() {
           <div className="flex gap-4">
              {activeView === 'logs' && (
                 <select 
-                  className="border rounded px-3 py-2" 
+                  className="border rounded px-3 py-2 bg-white text-gray-900" 
                   value={selectedCustomerId || ''} 
                   onChange={(e) => setSelectedCustomerId(Number(e.target.value))}
                 >
@@ -105,8 +106,9 @@ export default function App() {
 
         {activeView === 'customers' && <CustomerView />}
         {activeView === 'logs' && <LogsView customerId={selectedCustomerId} month={selectedMonth} />}
-        {activeView === 'stats' && <StatsView customerId={selectedCustomerId} month={selectedMonth} />}
+        {activeView === 'stats' && <StatsView month={selectedMonth} />}
         {activeView === 'history' && <HistoryView />}
+        {activeView === 'settings' && <SettingsView />}
       </main>
     </div>
   );
@@ -168,16 +170,16 @@ function CustomerView() {
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h3 className="text-lg font-bold mb-4">{editingId ? 'Edit Customer' : 'Add New Customer'}</h3>
+        <h3 className="text-lg font-bold mb-4 text-gray-900">{editingId ? 'Edit Customer' : 'Add New Customer'}</h3>
         <div className="grid grid-cols-2 gap-4">
-          <input className="border rounded p-2" placeholder="Dienstleistung" value={formData.dienstleistung || ''} onChange={e => setFormData({...formData, dienstleistung: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Kunde" value={formData.kunde || ''} onChange={e => setFormData({...formData, kunde: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Assistent" value={formData.assistent || ''} onChange={e => setFormData({...formData, assistent: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Adresse" value={formData.adresse || ''} onChange={e => setFormData({...formData, adresse: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Anfahrt from" value={formData.anfahrtFrom || ''} onChange={e => setFormData({...formData, anfahrtFrom: e.target.value})} />
-          <input className="border rounded p-2" placeholder="Abfahrt to" value={formData.abfahrtTo || ''} onChange={e => setFormData({...formData, abfahrtTo: e.target.value})} />
-          <input className="border rounded p-2" type="number" placeholder="Drive time (min)" value={formData.driveTimeMinutes || ''} onChange={e => setFormData({...formData, driveTimeMinutes: Number(e.target.value)})} />
-          <input className="border rounded p-2" type="number" placeholder="KM" value={formData.km || ''} onChange={e => setFormData({...formData, km: Number(e.target.value)})} />
+          <input className="border rounded p-2 bg-white text-gray-900" placeholder="Dienstleistung" value={formData.dienstleistung || ''} onChange={e => setFormData({...formData, dienstleistung: e.target.value})} />
+          <input className="border rounded p-2 bg-white text-gray-900" placeholder="Kunde" value={formData.kunde || ''} onChange={e => setFormData({...formData, kunde: e.target.value})} />
+          <input className="border rounded p-2 bg-white text-gray-900" placeholder="Assistent" value={formData.assistent || ''} onChange={e => setFormData({...formData, assistent: e.target.value})} />
+          <input className="border rounded p-2 bg-white text-gray-900" placeholder="Adresse" value={formData.adresse || ''} onChange={e => setFormData({...formData, adresse: e.target.value})} />
+          <input className="border rounded p-2 bg-white text-gray-900" placeholder="Anfahrt from" value={formData.anfahrtFrom || ''} onChange={e => setFormData({...formData, anfahrtFrom: e.target.value})} />
+          <input className="border rounded p-2 bg-white text-gray-900" placeholder="Abfahrt to" value={formData.abfahrtTo || ''} onChange={e => setFormData({...formData, abfahrtTo: e.target.value})} />
+          <input className="border rounded p-2 bg-white text-gray-900" type="number" placeholder="Drive time (min)" value={formData.driveTimeMinutes || ''} onChange={e => setFormData({...formData, driveTimeMinutes: Number(e.target.value)})} />
+          <input className="border rounded p-2 bg-white text-gray-900" type="number" placeholder="KM" value={formData.km || ''} onChange={e => setFormData({...formData, km: Number(e.target.value)})} />
         </div>
         <div className="mt-4 flex gap-2">
           <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700">
@@ -304,59 +306,100 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
   if (!customerId) return <div className="text-center p-12 bg-white rounded-xl border">Please select a customer to view logs.</div>;
 
   return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-      <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-         <h3 className="font-bold">Protocol for {customer?.kunde} ({month})</h3>
-         <div className="flex gap-2">
-           <button 
-             onClick={() => setSelectedDayStrings(days.map(d => format(d, 'yyyy-MM-dd')))}
-             className="text-xs text-blue-600 hover:underline"
-           >
-             Select All
-           </button>
-           <button 
-             onClick={() => setSelectedDayStrings([])}
-             className="text-xs text-gray-500 hover:underline"
-           >
-             Clear
-           </button>
-           <button onClick={generatePDF} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2">
-             <FileText size={18} /> Export PDF ({selectedDayStrings.length})
-           </button>
-         </div>
+    <div className="space-y-6">
+      {customer && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Dienstleistung</p>
+              <p className="text-gray-900 font-medium">{customer.dienstleistung}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Kunde</p>
+              <p className="text-gray-900 font-medium">{customer.kunde}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Assistent</p>
+              <p className="text-gray-900 font-medium">{customer.assistent}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Adresse</p>
+              <p className="text-gray-900 font-medium">{customer.adresse}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Anfahrt von</p>
+              <p className="text-gray-900 font-medium">{customer.anfahrtFrom}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Abfahrt zu</p>
+              <p className="text-gray-900 font-medium">{customer.abfahrtTo}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Fahrtzeit (Soll)</p>
+              <p className="text-gray-900 font-medium">{customer.driveTimeMinutes} min</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Kilometer (Soll)</p>
+              <p className="text-gray-900 font-medium">{customer.km} km</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+           <h3 className="font-bold">Protocol for {customer?.kunde} ({month})</h3>
+           <div className="flex gap-2">
+             <button 
+               onClick={() => setSelectedDayStrings(days.map(d => format(d, 'yyyy-MM-dd')))}
+               className="text-xs text-blue-600 hover:underline"
+             >
+               Select All
+             </button>
+             <button 
+               onClick={() => setSelectedDayStrings([])}
+               className="text-xs text-gray-500 hover:underline"
+             >
+               Clear
+             </button>
+             <button onClick={generatePDF} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2">
+               <FileText size={18} /> Export PDF ({selectedDayStrings.length})
+             </button>
+           </div>
+        </div>
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-50 text-sm uppercase text-gray-500">
+            <tr>
+              <th className="p-3 border-b w-10"></th>
+              <th className="p-3 border-b">Date</th>
+              <th className="p-3 border-b">Förderziel</th>
+              <th className="p-3 border-b">Assistenzinhalt</th>
+              <th className="p-3 border-b">Start</th>
+              <th className="p-3 border-b">End</th>
+              <th className="p-3 border-b">Time (min)</th>
+              <th className="p-3 border-b text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const log = logs?.find(l => l.date === dateStr);
+              const isSelected = selectedDayStrings.includes(dateStr);
+              return (
+                <LogRow 
+                  key={dateStr} 
+                  day={day} 
+                  log={log} 
+                  isSelected={isSelected}
+                  onToggle={() => toggleDaySelection(dateStr)}
+                  onSave={(d) => handleSaveLog(dateStr, d)} 
+                  defaults={customer} 
+                />
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      <table className="w-full text-left border-collapse">
-        <thead className="bg-gray-50 text-sm uppercase text-gray-500">
-          <tr>
-            <th className="p-3 border-b w-10"></th>
-            <th className="p-3 border-b">Date</th>
-            <th className="p-3 border-b">Förderziel</th>
-            <th className="p-3 border-b">Assistenzinhalt</th>
-            <th className="p-3 border-b">Start</th>
-            <th className="p-3 border-b">End</th>
-            <th className="p-3 border-b">Time (min)</th>
-            <th className="p-3 border-b text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {days.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const log = logs?.find(l => l.date === dateStr);
-            const isSelected = selectedDayStrings.includes(dateStr);
-            return (
-              <LogRow 
-                key={dateStr} 
-                day={day} 
-                log={log} 
-                isSelected={isSelected}
-                onToggle={() => toggleDaySelection(dateStr)}
-                onSave={(d) => handleSaveLog(dateStr, d)} 
-                defaults={customer} 
-              />
-            );
-          })}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -367,14 +410,28 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
 
   useEffect(() => { setData(log || {}); }, [log]);
 
+  const calculateDuration = (start: string, end: string) => {
+    if (!start || !end) return;
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+    let diff = endTotal - startTotal;
+    if (diff < 0) diff += 24 * 60; // Handle overnight if applicable, though unlikely here
+    setData(prev => ({ ...prev, timeWithCustomerMinutes: diff }));
+  };
+
   const handleApplyDefaults = () => {
+    const defaultStart = '08:00';
+    const defaultEnd = '16:00';
     setData({
       ...data,
-      startTime: '08:00',
-      endTime: '16:00',
+      startTime: defaultStart,
+      endTime: defaultEnd,
       foerderziel: '',
       assistenzinhalt: '',
     });
+    calculateDuration(defaultStart, defaultEnd);
     setIsEditing(true);
   };
 
@@ -391,11 +448,33 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
       <td className="p-3 font-medium">{format(day, 'dd.MM (EEE)')}</td>
       {isEditing ? (
         <>
-          <td className="p-1"><input type="text" className="border rounded p-1 w-full" value={data.foerderziel || ''} onChange={e => setData({...data, foerderziel: e.target.value})} /></td>
-          <td className="p-1"><input type="text" className="border rounded p-1 w-full" value={data.assistenzinhalt || ''} onChange={e => setData({...data, assistenzinhalt: e.target.value})} /></td>
-          <td className="p-1"><input type="time" className="border rounded p-1 w-full" value={data.startTime || ''} onChange={e => setData({...data, startTime: e.target.value})} /></td>
-          <td className="p-1"><input type="time" className="border rounded p-1 w-full" value={data.endTime || ''} onChange={e => setData({...data, endTime: e.target.value})} /></td>
-          <td className="p-1"><input type="number" className="border rounded p-1 w-24" value={data.timeWithCustomerMinutes || 0} onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})} /></td>
+          <td className="p-1"><input type="text" className="border rounded p-1 w-full bg-white text-gray-900" value={data.foerderziel || ''} onChange={e => setData({...data, foerderziel: e.target.value})} /></td>
+          <td className="p-1"><input type="text" className="border rounded p-1 w-full bg-white text-gray-900" value={data.assistenzinhalt || ''} onChange={e => setData({...data, assistenzinhalt: e.target.value})} /></td>
+          <td className="p-1">
+            <input 
+              type="time" 
+              className="border rounded p-1 w-full bg-white text-gray-900" 
+              value={data.startTime || ''} 
+              onChange={e => {
+                const newStart = e.target.value;
+                setData({...data, startTime: newStart});
+                if (data.endTime) calculateDuration(newStart, data.endTime);
+              }} 
+            />
+          </td>
+          <td className="p-1">
+            <input 
+              type="time" 
+              className="border rounded p-1 w-full bg-white text-gray-900" 
+              value={data.endTime || ''} 
+              onChange={e => {
+                const newEnd = e.target.value;
+                setData({...data, endTime: newEnd});
+                if (data.startTime) calculateDuration(data.startTime, newEnd);
+              }} 
+            />
+          </td>
+          <td className="p-1"><input type="number" className="border rounded p-1 w-24 bg-white text-gray-900" value={data.timeWithCustomerMinutes || 0} onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})} /></td>
           <td className="p-3 text-right flex justify-end gap-1">
             <button onClick={() => { onSave(data); setIsEditing(false); }} className="text-green-600 p-1"><Save size={18} /></button>
             <button onClick={() => setIsEditing(false)} className="text-gray-400 p-1">X</button>
@@ -418,37 +497,335 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
   );
 }
 
-function StatsView({ customerId, month }: { customerId: number | null, month: string }) {
-  const logs = useLiveQuery(
-    () => (customerId ? db.logs.where('customerId').equals(customerId).filter(l => l.date.startsWith(month)).toArray() : Promise.resolve([])) as Promise<DailyLog[]>,
-    [customerId, month]
+function StatsView({ month }: { month: string }) {
+  const allLogs = useLiveQuery(
+    () => db.logs.filter(l => l.date.startsWith(month)).toArray(),
+    [month]
   );
-  const customer = useLiveQuery(() => (customerId ? db.customers.get(customerId) : Promise.resolve(undefined)) as Promise<Customer | undefined>, [customerId]);
+  const customers = useLiveQuery(() => db.customers.toArray());
+  const fuelConsumption = useLiveQuery(() => db.settings.get('fuelConsumption'));
+  const fuelPrice = useLiveQuery(() => db.settings.get('fuelPrice'));
 
-  if (!customerId) return <div>Please select a customer.</div>;
+  if (!customers || !allLogs) return <div className="p-12 text-center text-gray-500">Loading statistics...</div>;
 
-  const totalKm = (customer?.km || 0) * (logs?.length || 0);
-  const totalMinutes = logs?.reduce((sum, l) => sum + (l.timeWithCustomerMinutes || 0), 0) || 0;
-  const totalDriveTime = (customer?.driveTimeMinutes || 0) * (logs?.length || 0);
+  const consumption = Number(fuelConsumption?.value) || 0;
+  const price = Number(fuelPrice?.value) || 0;
 
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = Math.round(totalMinutes % 60);
+  const statsPerCustomer = customers.map(c => {
+    const customerLogs = allLogs.filter(l => l.customerId === c.id);
+    const totalMinutes = customerLogs.reduce((sum, l) => sum + (l.timeWithCustomerMinutes || 0), 0);
+    const totalKm = (c.km || 0) * customerLogs.length;
+    const totalDriveTime = (c.driveTimeMinutes || 0) * customerLogs.length;
+    
+    // Gasoline Cost = (km / 100) * consumption * price
+    const gasolineCost = (totalKm / 100) * consumption * price;
+
+    return {
+      customer: c,
+      totalMinutes,
+      totalKm,
+      totalDriveTime,
+      gasolineCost,
+      count: customerLogs.length
+    };
+  }).filter(s => s.count > 0);
+
+  const grandTotalMinutes = statsPerCustomer.reduce((sum, s) => sum + s.totalMinutes, 0);
+  const grandTotalKm = statsPerCustomer.reduce((sum, s) => sum + s.totalKm, 0);
+  const grandTotalDriveTime = statsPerCustomer.reduce((sum, s) => sum + s.totalDriveTime, 0);
+  const grandTotalGasCost = statsPerCustomer.reduce((sum, s) => sum + s.gasolineCost, 0);
+
+  const formatTime = (totalMinutes: number) => {
+    const h = Math.floor(totalMinutes / 60);
+    const m = Math.round(totalMinutes % 60);
+    return `${h}h ${m}m`;
+  };
+
+  const generateStatsPDF = (scope: 'month' | 'year') => {
+    if (!customers || !allLogs) return;
+    const doc = new jsPDF();
+    const title = scope === 'month' ? `STATISTIK - MONAT ${month}` : `STATISTIK - JAHR ${month.split('-')[0]}`;
+    
+    doc.setFontSize(18);
+    doc.text(title, 105, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.text(`Erstellt am: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 14, 30);
+    if (consumption > 0) {
+      doc.text(`Kraftstoff: ${consumption} l/100km @ ${price} €/l`, 14, 35);
+    }
+
+    const tableData = statsPerCustomer.map(s => [
+      s.customer.kunde,
+      s.count.toString(),
+      formatTime(s.totalMinutes),
+      formatTime(s.totalDriveTime),
+      `${s.totalKm} km`,
+      `${s.gasolineCost.toFixed(2)} €`
+    ]);
+
+    tableData.push([
+      'GESAMT',
+      statsPerCustomer.reduce((sum, s) => sum + s.count, 0).toString(),
+      formatTime(grandTotalMinutes),
+      formatTime(grandTotalDriveTime),
+      `${grandTotalKm} km`,
+      `${grandTotalGasCost.toFixed(2)} €`
+    ]);
+
+    autoTable(doc, {
+      startY: 45,
+      head: [['Kunde', 'Tage', 'Arbeitszeit', 'Fahrtzeit', 'Distanz', 'Benzinkosten']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [200, 200, 200], textColor: 0 },
+      styles: { fontSize: 8 },
+      didParseCell: (data) => {
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [240, 240, 240];
+        }
+      }
+    });
+
+    doc.save(`Statistik_${scope}_${month}.pdf`);
+  };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Distance</h3>
-        <p className="text-4xl font-black text-blue-600">{totalKm} <span className="text-lg">km</span></p>
-        <p className="text-xs text-gray-400 mt-2">Based on {customer?.km}km per day</p>
+    <div className="space-y-6">
+      <div className="flex justify-end gap-2">
+        <button 
+          onClick={() => generateStatsPDF('month')}
+          className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700"
+        >
+          <FileText size={18} /> Export Month PDF
+        </button>
+        <button 
+          onClick={() => {
+            // For year export, we need to fetch all logs for the year
+            const year = month.split('-')[0];
+            db.logs.filter(l => l.date.startsWith(year)).toArray().then(yearLogs => {
+              const yearStats = customers.map(c => {
+                const customerLogs = yearLogs.filter(l => l.customerId === c.id);
+                const totalMinutes = customerLogs.reduce((sum, l) => sum + (l.timeWithCustomerMinutes || 0), 0);
+                const totalKm = (c.km || 0) * customerLogs.length;
+                const totalDriveTime = (c.driveTimeMinutes || 0) * customerLogs.length;
+                const gasolineCost = (totalKm / 100) * consumption * price;
+                return { customer: c, totalMinutes, totalKm, totalDriveTime, gasolineCost, count: customerLogs.length };
+              }).filter(s => s.count > 0);
+
+              const yTotalMinutes = yearStats.reduce((sum, s) => sum + s.totalMinutes, 0);
+              const yTotalKm = yearStats.reduce((sum, s) => sum + s.totalKm, 0);
+              const yTotalDriveTime = yearStats.reduce((sum, s) => sum + s.totalDriveTime, 0);
+              const yTotalGasCost = yearStats.reduce((sum, s) => sum + s.gasolineCost, 0);
+
+              const doc = new jsPDF();
+              doc.setFontSize(18);
+              doc.text(`STATISTIK - JAHR ${year}`, 105, 20, { align: 'center' });
+              doc.setFontSize(10);
+              doc.text(`Erstellt am: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 14, 30);
+              if (consumption > 0) doc.text(`Kraftstoff: ${consumption} l/100km @ ${price} €/l`, 14, 35);
+
+              const yTableData = yearStats.map(s => [
+                s.customer.kunde,
+                s.count.toString(),
+                formatTime(s.totalMinutes),
+                formatTime(s.totalDriveTime),
+                `${s.totalKm} km`,
+                `${s.gasolineCost.toFixed(2)} €`
+              ]);
+
+              yTableData.push([
+                'GESAMT',
+                yearStats.reduce((sum, s) => sum + s.count, 0).toString(),
+                formatTime(yTotalMinutes),
+                formatTime(yTotalDriveTime),
+                `${yTotalKm} km`,
+                `${yTotalGasCost.toFixed(2)} €`
+              ]);
+
+              autoTable(doc, {
+                startY: 45,
+                head: [['Kunde', 'Tage', 'Arbeitszeit', 'Fahrtzeit', 'Distanz', 'Benzinkosten']],
+                body: yTableData,
+                theme: 'grid',
+                headStyles: { fillColor: [200, 200, 200], textColor: 0 },
+                styles: { fontSize: 8 },
+                didParseCell: (data) => {
+                  if (data.row.index === yTableData.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [240, 240, 240];
+                  }
+                }
+              });
+              doc.save(`Statistik_Jahr_${year}.pdf`);
+            });
+          }}
+          className="bg-purple-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-purple-700"
+        >
+          <FileText size={18} /> Export Year PDF
+        </button>
       </div>
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Time with Customer</h3>
-        <p className="text-4xl font-black text-green-600">{hours}h {minutes}m</p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Distance (Month)</h3>
+          <p className="text-4xl font-black text-blue-600">{grandTotalKm} <span className="text-lg">km</span></p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Gasoline Cost</h3>
+          <p className="text-4xl font-black text-red-600">{grandTotalGasCost.toFixed(2)} <span className="text-lg">€</span></p>
+          <p className="text-xs text-gray-400 mt-2">{consumption} l/100km @ {price} €/l</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Time with Customer</h3>
+          <p className="text-4xl font-black text-green-600">{formatTime(grandTotalMinutes)}</p>
+          <p className="text-xs text-gray-400 mt-2">{grandTotalMinutes} min total</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Drive Time</h3>
+          <p className="text-4xl font-black text-orange-600">{formatTime(grandTotalDriveTime)}</p>
+          <p className="text-xs text-gray-400 mt-2">{grandTotalDriveTime} min total</p>
+        </div>
       </div>
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h3 className="text-gray-500 text-sm font-bold uppercase mb-2">Total Drive Time</h3>
-        <p className="text-4xl font-black text-orange-600">{Math.floor(totalDriveTime / 60)}h {totalDriveTime % 60}m</p>
-        <p className="text-xs text-gray-400 mt-2">Based on {customer?.driveTimeMinutes}min per day</p>
+
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="p-4 border-b bg-gray-50">
+          <h3 className="font-bold text-gray-800">Customer Breakdown</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse table-fixed">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold">
+              <tr>
+                <th className="p-4 border-b w-[25%]">Customer / Service</th>
+                <th className="p-4 border-b text-center w-[10%]">Days</th>
+                <th className="p-4 border-b text-right w-[15%]">Work Time</th>
+                <th className="p-4 border-b text-right w-[15%]">Drive Time</th>
+                <th className="p-4 border-b text-right w-[15%]">Distance</th>
+                <th className="p-4 border-b text-right text-red-600 w-[20%]">Gasoline</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y text-sm">
+              {statsPerCustomer.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-gray-500">No logs found for this month.</td>
+                </tr>
+              ) : (
+                statsPerCustomer.map(s => (
+                  <tr key={s.customer.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="p-4">
+                      <p className="font-bold text-gray-900">{s.customer.kunde}</p>
+                      <p className="text-xs text-gray-500">{s.customer.dienstleistung}</p>
+                    </td>
+                    <td className="p-4 text-center text-gray-600 font-medium">
+                      {s.count}
+                    </td>
+                    <td className="p-4 text-right">
+                      <p className="font-bold text-gray-900">{s.totalMinutes} m</p>
+                      <p className="text-xs text-gray-500">{formatTime(s.totalMinutes)}</p>
+                    </td>
+                    <td className="p-4 text-right">
+                      <p className="font-bold text-orange-600">{s.totalDriveTime} m</p>
+                      <p className="text-xs text-gray-500">{formatTime(s.totalDriveTime)}</p>
+                    </td>
+                    <td className="p-4 text-right">
+                      <p className="font-bold text-blue-600">{s.totalKm} km</p>
+                    </td>
+                    <td className="p-4 text-right">
+                      <p className="font-bold text-red-600">{s.gasolineCost.toFixed(2)} €</p>
+                    </td>
+                  </tr>
+                )
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {statsPerCustomer.length > 0 && (
+          <div className="bg-gray-100 border-t">
+            <table className="w-full text-left border-collapse table-fixed">
+              <tbody className="text-sm">
+                <tr className="bg-gray-100 font-black text-gray-900">
+                  <td className="p-4 w-[25%]">Month Total</td>
+                  <td className="p-4 text-center w-[10%]">
+                    {statsPerCustomer.reduce((sum, s) => sum + s.count, 0)}
+                  </td>
+                  <td className="p-4 text-right w-[15%]">
+                    <p className="text-green-600">{grandTotalMinutes} m</p>
+                    <p className="text-xs text-gray-500 font-bold">{formatTime(grandTotalMinutes)}</p>
+                  </td>
+                  <td className="p-4 text-right w-[15%]">
+                    <p className="text-orange-600">{grandTotalDriveTime} m</p>
+                    <p className="text-xs text-gray-500 font-bold">{formatTime(grandTotalDriveTime)}</p>
+                  </td>
+                  <td className="p-4 text-right w-[15%]">
+                    <p className="text-blue-600">{grandTotalKm} km</p>
+                  </td>
+                  <td className="p-4 text-right w-[20%]">
+                    <p className="text-red-600">{grandTotalGasCost.toFixed(2)} €</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SettingsView() {
+  const fuelConsumption = useLiveQuery(() => db.settings.get('fuelConsumption'));
+  const fuelPrice = useLiveQuery(() => db.settings.get('fuelPrice'));
+
+  const [consumption, setConsumption] = useState('');
+  const [price, setPrice] = useState('');
+
+  useEffect(() => {
+    if (fuelConsumption) setConsumption(String(fuelConsumption.value));
+    if (fuelPrice) setPrice(String(fuelPrice.value));
+  }, [fuelConsumption, fuelPrice]);
+
+  const handleSave = async () => {
+    await db.settings.put({ key: 'fuelConsumption', value: Number(consumption) });
+    await db.settings.put({ key: 'fuelPrice', value: Number(price) });
+    alert('Settings saved!');
+  };
+
+  return (
+    <div className="max-w-md mx-auto bg-white p-8 rounded-xl border shadow-sm">
+      <h3 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+        <Settings size={24} className="text-gray-400" />
+        General Configuration
+      </h3>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Consumption (Liters / 100km)</label>
+          <input 
+            type="number" 
+            step="0.1"
+            className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+            value={consumption} 
+            onChange={e => setConsumption(e.target.value)} 
+            placeholder="e.g. 6.5"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Price (Price per Liter)</label>
+          <input 
+            type="number" 
+            step="0.01"
+            className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+            value={price} 
+            onChange={e => setPrice(e.target.value)} 
+            placeholder="e.g. 1.75"
+          />
+        </div>
+        <button 
+          onClick={handleSave} 
+          className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors mt-4"
+        >
+          <Save size={20} /> Save Configuration
+        </button>
       </div>
     </div>
   );

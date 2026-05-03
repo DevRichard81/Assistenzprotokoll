@@ -33,21 +33,25 @@ export interface ChangeLog {
   newValue?: any;
 }
 
+export interface Setting {
+  key: string;
+  value: any;
+}
+
 const db = new Dexie('TanyaFillOutDB') as Dexie & {
   customers: EntityTable<Customer, 'id'>;
   logs: EntityTable<DailyLog, 'id'>;
   auditTrail: EntityTable<ChangeLog, 'id'>;
+  settings: EntityTable<Setting, 'key'>;
 };
 
-db.version(2).stores({
+db.version(3).stores({
   customers: '++id, kunde',
   logs: '++id, customerId, date',
-  auditTrail: '++id, entityType, entityId, timestamp'
+  auditTrail: '++id, entityType, entityId, timestamp',
+  settings: 'key'
 }).upgrade(tx => {
-  // Simple upgrade path: clear old data as it's a structural change
-  // In a real app we'd migrate, but here we'll just ensure it doesn't crash
-  return tx.table('customers').toCollection().delete()
-    .then(() => tx.table('logs').toCollection().delete());
+  // Version 3 adds settings table. No data migration needed for version 2 -> 3
 });
 
 export { db };
