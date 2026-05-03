@@ -347,7 +347,7 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       kdanabkm: 'kdanab_km_1',
     };
 
-    const resolveDataValue = (token: string, dataMap: Record<string, string>) => {
+    const resolveDataValue = (token: string, dataMap: Record<string, string>, allowAlias = true) => {
       if (!token) return undefined;
       if (Object.prototype.hasOwnProperty.call(dataMap, token)) return dataMap[token];
 
@@ -358,8 +358,10 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       const normalizedDataEntry = Object.entries(dataMap).find(([key]) => normalizeFieldName(key) === normalizedToken);
       if (normalizedDataEntry) return normalizedDataEntry[1];
 
-      const aliasKey = aliasToDataKey[normalizedToken];
-      if (aliasKey && Object.prototype.hasOwnProperty.call(dataMap, aliasKey)) return dataMap[aliasKey];
+      if (allowAlias) {
+        const aliasKey = aliasToDataKey[normalizedToken];
+        if (aliasKey && Object.prototype.hasOwnProperty.call(dataMap, aliasKey)) return dataMap[aliasKey];
+      }
 
       return undefined;
     };
@@ -371,11 +373,13 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       form: ReturnType<PDFDocument['getForm']>
     ) => {
       const clean = fieldToken.replaceAll('{{', '').replaceAll('}}', '').trim();
+      const isMustacheToken = fieldToken.includes('{{') && fieldToken.includes('}}');
       const candidates = Array.from(new Set([
         fieldToken,
         clean,
         `{{${clean}}}`,
       ])).filter(Boolean);
+      const candidateLower = new Set(candidates.map((c) => c.trim().toLowerCase()));
 
       const allFields = form.getFields();
       let fieldHandled = false;
@@ -418,7 +422,16 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
           if (title instanceof PDFString || title instanceof PDFHexString) name = title.decodeText();
           if ((!name || name === 'ramboo') && (contents instanceof PDFString || contents instanceof PDFHexString)) name = contents.decodeText();
 
-          if (name && normalizedCandidates.has(normalizeFieldName(name))) {
+          if (!name) return;
+
+          const nameTrimmed = name.trim();
+          const isLabelLike = /[A-Za-zÄÖÜäöüß\s]+:$/.test(nameTrimmed);
+          // Avoid replacing static labels like "Jahr:" when token is a placeholder key like {{jahr}}.
+          if (isMustacheToken && isLabelLike) return;
+
+          const hasExactOrBracedMatch = candidateLower.has(nameTrimmed.toLowerCase());
+          const hasNormalizedMatch = normalizedCandidates.has(normalizeFieldName(nameTrimmed));
+          if (hasExactOrBracedMatch || hasNormalizedMatch) {
             annot.set(PDFName.of('Contents'), PDFString.of(value));
             annot.set(PDFName.of('RC'), PDFString.of(value));
             annot.set(PDFName.of('V'), PDFString.of(value));
@@ -544,9 +557,13 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
         });
 
         autoTokens.forEach((token) => {
-          const value = resolveDataValue(token, dataMap);
+          const trimmedToken = token.trim();
+          // Do not treat static labels (e.g. "Jahr:") as data placeholders.
+          if (/^[A-Za-zÄÖÜäöüß\s]+:$/.test(trimmedToken)) return;
+
+          const value = resolveDataValue(trimmedToken, dataMap, false);
           if (value !== undefined) {
-            setPdfFieldValue(pdfDoc, token, value, form);
+            setPdfFieldValue(pdfDoc, trimmedToken, value, form);
           }
         });
 
