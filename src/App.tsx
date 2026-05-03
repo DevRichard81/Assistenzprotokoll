@@ -858,13 +858,12 @@ function StatsView({ month }: { month: string }) {
     [month]
   );
   const customers = useLiveQuery(() => db.customers.toArray());
-  const fuelConsumption = useLiveQuery(() => db.settings.get('fuelConsumption'));
-  const fuelPrice = useLiveQuery(() => db.settings.get('fuelPrice'));
+  const gasolineSettings = useLiveQuery(() => db.settings.get('gasoline'));
 
   if (!customers || !allLogs) return <div className="p-12 text-center text-gray-500">Loading statistics...</div>;
 
-  const consumption = Number(fuelConsumption?.value) || 0;
-  const price = Number(fuelPrice?.value) || 0;
+  const consumption = Number(gasolineSettings?.value?.consumption) || 0;
+  const price = Number(gasolineSettings?.value?.price) || 0;
 
   const statsPerCustomer = customers.map(c => {
     const customerLogs = allLogs.filter(l => l.customerId === c.id);
@@ -1129,8 +1128,7 @@ function StatsView({ month }: { month: string }) {
 }
 
 function SettingsView() {
-  const fuelConsumption = useLiveQuery(() => db.settings.get('fuelConsumption'));
-  const fuelPrice = useLiveQuery(() => db.settings.get('fuelPrice'));
+  const gasolineSetting = useLiveQuery(() => db.settings.get('gasoline'));
   const activePdfTemplateId = useLiveQuery(() => db.settings.get('activePdfTemplateId'));
   const pdfTemplates = useLiveQuery(() => db.pdfTemplates.toArray()) || [];
 
@@ -1140,14 +1138,15 @@ function SettingsView() {
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (fuelConsumption) setConsumption(String(fuelConsumption.value));
-    if (fuelPrice) setPrice(String(fuelPrice.value));
+    if (gasolineSetting) {
+      setConsumption(String(gasolineSetting.value?.consumption ?? ''));
+      setPrice(String(gasolineSetting.value?.price ?? ''));
+    }
     if (activePdfTemplateId) setSelectedPdfTemplateId(activePdfTemplateId.value);
-  }, [fuelConsumption, fuelPrice, activePdfTemplateId]);
+  }, [gasolineSetting, activePdfTemplateId]);
 
   const handleSave = async () => {
-    await db.settings.put({ key: 'fuelConsumption', value: Number(consumption) });
-    await db.settings.put({ key: 'fuelPrice', value: Number(price) });
+    await db.settings.put({ key: 'gasoline', value: { consumption: Number(consumption), price: Number(price) } });
     if (selectedPdfTemplateId) {
       await db.settings.put({ key: 'activePdfTemplateId', value: Number(selectedPdfTemplateId) });
     } else {
