@@ -1137,6 +1137,7 @@ function SettingsView() {
   const [consumption, setConsumption] = useState('');
   const [price, setPrice] = useState('');
   const [selectedPdfTemplateId, setSelectedPdfTemplateId] = useState<number | undefined>(undefined);
+  const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (fuelConsumption) setConsumption(String(fuelConsumption.value));
@@ -1153,6 +1154,77 @@ function SettingsView() {
       await db.settings.delete('activePdfTemplateId');
     }
     alert('Settings saved!');
+  };
+
+  const handleBackup = async () => {
+    try {
+      const [customers, logs, settings, pdfTemplatesData, auditTrail] = await Promise.all([
+        db.customers.toArray(),
+        db.logs.toArray(),
+        db.settings.toArray(),
+        db.pdfTemplates.toArray(),
+        db.auditTrail.toArray(),
+      ]);
+
+      const backup = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        customers,
+        logs,
+        settings,
+        pdfTemplates: pdfTemplatesData,
+        auditTrail,
+      };
+
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `assistenz_backup_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error(err);
+      alert('Backup failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (!confirm('This will REPLACE all existing data with the backup. Are you sure?')) return;
+
+    setRestoreStatus('Restoring...');
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      if (!backup.version || !backup.customers || !backup.logs) {
+        throw new Error('Invalid backup file format.');
+      }
+
+      await db.transaction('rw', [db.customers, db.logs, db.settings, db.pdfTemplates, db.auditTrail], async () => {
+        await db.customers.clear();
+        await db.logs.clear();
+        await db.settings.clear();
+        await db.pdfTemplates.clear();
+        await db.auditTrail.clear();
+
+        if (backup.customers?.length) await db.customers.bulkAdd(backup.customers);
+        if (backup.logs?.length) await db.logs.bulkAdd(backup.logs);
+        if (backup.settings?.length) await db.settings.bulkAdd(backup.settings);
+        if (backup.pdfTemplates?.length) await db.pdfTemplates.bulkAdd(backup.pdfTemplates);
+        if (backup.auditTrail?.length) await db.auditTrail.bulkAdd(backup.auditTrail);
+      });
+
+      setRestoreStatus(`✅ Restored successfully from ${backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : 'backup'}.`);
+    } catch (err) {
+      console.error(err);
+      setRestoreStatus('❌ Restore failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
   return (
@@ -1207,6 +1279,42 @@ function SettingsView() {
           >
             <Save size={20} /> Save Configuration
           </button>
+        </div>
+      </div>
+
+      {/* Backup & Restore */}
+      <div className="bg-white p-8 rounded-xl border shadow-sm">
+        <h3 className="text-xl font-bold mb-2 text-gray-900 flex items-center gap-2">
+          <Download size={24} className="text-gray-400" />
+          Backup &amp; Restore
+        </h3>
+        <p className="text-sm text-gray-500 mb-6">
+          Save a full backup of all data (customers, daily logs, PDF templates, settings, change log) to a JSON file, or restore from a previous backup.
+        </p>
+
+        <div className="space-y-3">
+          <button
+            onClick={handleBackup}
+            className="w-full bg-green-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} /> Download Backup (.json)
+          </button>
+
+          <label className="w-full bg-orange-500 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-orange-600 transition-colors cursor-pointer">
+            <RefreshCw size={20} /> Restore from Backup
+            <input
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleRestore}
+            />
+          </label>
+
+          {restoreStatus && (
+            <div className={`text-sm p-3 rounded-lg ${restoreStatus.startsWith('✅') ? 'bg-green-50 text-green-800 border border-green-200' : restoreStatus === 'Restoring...' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+              {restoreStatus}
+            </div>
+          )}
         </div>
       </div>
     </div>
