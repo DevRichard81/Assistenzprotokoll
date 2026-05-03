@@ -310,152 +310,252 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
     }
 
     const [yearStr, monthStr] = month.split('-');
-    const totalKm = exportEntries.reduce((acc, entry) => acc + (entry.log?.km || customer.km || 0), 0);
-    const totalWorkMinutes = exportEntries.reduce((acc, entry) => acc + (entry.log?.timeWithCustomerMinutes || 0), 0);
-    const totalDriveMinutes = exportEntries.reduce((acc, entry) => acc + (entry.log?.traveltime || customer.driveTimeMinutes || 0), 0);
+    const monthTotalKm = exportEntries.reduce((acc, entry) => acc + (entry.log?.km || customer.km || 0), 0);
+    const monthTotalWorkMinutes = exportEntries.reduce((acc, entry) => acc + (entry.log?.timeWithCustomerMinutes || 0), 0);
+    const monthTotalDriveMinutes = exportEntries.reduce((acc, entry) => acc + (entry.log?.traveltime || customer.driveTimeMinutes || 0), 0);
     const gasSettings = await db.settings.get('gasoline');
     const fuelPrice = gasSettings?.value?.price || 0;
     const fuelConsumption = gasSettings?.value?.consumption || 0;
-    const totalGasCost = (totalKm / 100) * fuelConsumption * fuelPrice;
 
-    const dataMap: Record<string, string> = {
-      kunde: customer.kunde,
-      dienstleistung: customer.dienstleistung,
-      assistent: customer.assistent,
-      adresse: customer.adresse,
-      anfahrtFrom: customer.anfahrtFrom,
-      abfahrtTo: customer.abfahrtTo,
-      driveTimeMinutes: `${customer.driveTimeMinutes} min`,
-      km: `${customer.km} km`,
-      month: monthStr,
-      month_name: format(new Date(Number(yearStr), Number(monthStr) - 1), 'MMMM'),
-      year: yearStr,
-      total_km: `${totalKm} km`,
-      total_work: `${totalWorkMinutes} min`,
-      total_drive: `${totalDriveMinutes} min`,
-      total_gas_cost: `${totalGasCost.toFixed(2)} €`,
+    const normalizeFieldName = (value: string) => value.replaceAll('{{', '').replaceAll('}}', '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+    const aliasToDataKey: Record<string, string> = {
+      betreuer: 'assistent',
+      betreuerin: 'assistent',
+      monat: 'month',
+      jahr: 'year',
+      datum: 'date_1',
+      forderziel: 'foerderziel_1',
+      foerderziel: 'foerderziel_1',
+      assistenzinhalt: 'assistenzinhalt_1',
+      anmerkungreflexion: 'anmerkungreflexion_1',
+      anmerkungenreflexion: 'anmerkungreflexion_1',
+      zeitvb: 'zeitvb_1',
+      zeitvonbis: 'zeitvb_1',
+      zeitinmin: 'zeitinmin_1',
+      anabfhartvon: 'anabfhart_von_1',
+      anabfhartbis: 'anabfhart_bis_1',
+      anabfahrtvon: 'anabfhart_von_1',
+      anabfahrtbis: 'anabfhart_bis_1',
+      anabzeit: 'anab_zeit_1',
+      anabkm: 'anab_km_1',
+      kdanabfhartvon: 'kdanabfhart_von_1',
+      kdanabfhartbis: 'kdanabfhart_bis_1',
+      kdanabfahrtvon: 'kdanabfhart_von_1',
+      kdanabfahrtbis: 'kdanabfhart_bis_1',
+      kdanabzeit: 'kdanab_zeit_1',
+      kdanabkm: 'kdanab_km_1',
     };
 
-    // Add daily log mappings for pdf-lib templates
-    exportEntries.forEach(({ day, log }, index) => {
-      if (log) {
-        const i = index + 1;
-        dataMap[`date_${i}`] = format(day, 'dd.MM.yyyy');
-        dataMap[`foerderziel_${i}`] = log.foerderziel;
-        dataMap[`assistenzinhalt_${i}`] = log.assistenzinhalt;
-        dataMap[`anmerkungreflexion_${i}`] = log.anmerkungReflexion;
-        dataMap[`startTime_${i}`] = log.startTime;
-        dataMap[`endTime_${i}`] = log.endTime;
-        dataMap[`zeitvb_${i}`] = `${log.startTime} - ${log.endTime}`;
-        dataMap[`zeitinmin_${i}`] = String(log.timeWithCustomerMinutes);
-        dataMap[`anabfhart_von_${i}`] = log.anabfhart_from;
-        dataMap[`anabfhart_bis_${i}`] = log.anabfhart_too;
-        dataMap[`anabfhart_from_${i}`] = log.anabfhart_from;
-        dataMap[`anabfhart_too_${i}`] = log.anabfhart_too;
-        dataMap[`traveltime_${i}`] = String(log.traveltime);
-        dataMap[`km_${i}`] = String(log.km);
-        dataMap[`anab_zeit_${i}`] = String(log.traveltime);
-        dataMap[`anab_km_${i}`] = String(log.km);
-        
-        dataMap[`customer_anabfhart_from_${i}`] = log.customer_anabfhart_from;
-        dataMap[`customer_anabfhart_too_${i}`] = log.customer_anabfhart_too;
-        dataMap[`coustomer_traveltime_${i}`] = String(log.coustomer_traveltime);
-        dataMap[`couistomer_km_${i}`] = String(log.couistomer_km);
-        
-        dataMap[`kdanabfhart_von_${i}`] = log.customer_anabfhart_from;
-        dataMap[`kdanabfhart_bis_${i}`] = log.customer_anabfhart_too;
-        dataMap[`kdanab_zeit_${i}`] = String(log.coustomer_traveltime);
-        dataMap[`kdanab_km_${i}`] = String(log.couistomer_km);
-      }
-    });
+    const resolveDataValue = (token: string, dataMap: Record<string, string>) => {
+      if (!token) return undefined;
+      if (Object.prototype.hasOwnProperty.call(dataMap, token)) return dataMap[token];
 
-    // PDF-LIB implementation only (legacy jsPDF template flow removed)
-    try {
-      const existingPdfBytes = await fetch(pdfTemplate.pdfBase64).then(res => res.arrayBuffer());
-      const pdfDoc = await PDFDocument.load(existingPdfBytes, { ignoreEncryption: true });
-      const form = pdfDoc.getForm();
+      const clean = token.replaceAll('{{', '').replaceAll('}}', '').trim();
+      if (Object.prototype.hasOwnProperty.call(dataMap, clean)) return dataMap[clean];
+
+      const normalizedToken = normalizeFieldName(clean);
+      const normalizedDataEntry = Object.entries(dataMap).find(([key]) => normalizeFieldName(key) === normalizedToken);
+      if (normalizedDataEntry) return normalizedDataEntry[1];
+
+      const aliasKey = aliasToDataKey[normalizedToken];
+      if (aliasKey && Object.prototype.hasOwnProperty.call(dataMap, aliasKey)) return dataMap[aliasKey];
+
+      return undefined;
+    };
+
+    const setPdfFieldValue = (
+      pdfDoc: PDFDocument,
+      fieldToken: string,
+      value: string,
+      form: ReturnType<PDFDocument['getForm']>
+    ) => {
+      const clean = fieldToken.replaceAll('{{', '').replaceAll('}}', '').trim();
+      const candidates = Array.from(new Set([
+        fieldToken,
+        clean,
+        `{{${clean}}}`,
+      ])).filter(Boolean);
+
+      const allFields = form.getFields();
+      let fieldHandled = false;
+
+      for (const candidate of candidates) {
+        try {
+          const exact = allFields.find((f) => f.getName() === candidate);
+          if (exact && 'setText' in exact) {
+            (exact as any).setText(value);
+            fieldHandled = true;
+            break;
+          }
+        } catch (e) {}
+
+        try {
+          const normalizedCandidate = normalizeFieldName(candidate);
+          const normalized = allFields.find((f) => normalizeFieldName(f.getName()) === normalizedCandidate);
+          if (normalized && 'setText' in normalized) {
+            (normalized as any).setText(value);
+            fieldHandled = true;
+            break;
+          }
+        } catch (e) {}
+      }
+
+      if (fieldHandled) return;
+
+      const normalizedCandidates = new Set(candidates.map(normalizeFieldName));
+      pdfDoc.getPages().forEach((page) => {
+        const annots = page.node.Annots();
+        if (!annots) return;
+
+        annots.asArray().forEach((ref) => {
+          const annot = pdfDoc.context.lookup(ref);
+          if (!(annot instanceof PDFDict)) return;
+
+          const title = annot.get(PDFName.of('T'));
+          const contents = annot.get(PDFName.of('Contents'));
+          let name = '';
+          if (title instanceof PDFString || title instanceof PDFHexString) name = title.decodeText();
+          if ((!name || name === 'ramboo') && (contents instanceof PDFString || contents instanceof PDFHexString)) name = contents.decodeText();
+
+          if (name && normalizedCandidates.has(normalizeFieldName(name))) {
+            annot.set(PDFName.of('Contents'), PDFString.of(value));
+          }
+        });
+      });
+    };
+
+    // One day entry = one PDF file
+    for (const { day, log } of exportEntries) {
+      if (!log) continue;
+
+      const monthTotalGasCost = (monthTotalKm / 100) * fuelConsumption * fuelPrice;
+
+      const dataMap: Record<string, string> = {
+        kunde: customer.kunde,
+        dienstleistung: customer.dienstleistung,
+        assistent: customer.assistent,
+        adresse: customer.adresse,
+        anfahrtFrom: customer.anfahrtFrom,
+        abfahrtTo: customer.abfahrtTo,
+        driveTimeMinutes: `${customer.driveTimeMinutes} min`,
+        km: `${customer.km} km`,
+        month: monthStr,
+        month_name: format(new Date(Number(yearStr), Number(monthStr) - 1), 'MMMM'),
+        year: yearStr,
+        total_km: `${monthTotalKm} km`,
+        total_work: `${monthTotalWorkMinutes} min`,
+        total_drive: `${monthTotalDriveMinutes} min`,
+        total_gas_cost: `${monthTotalGasCost.toFixed(2)} €`,
+        date_1: format(day, 'dd.MM.yyyy'),
+        datum: format(day, 'dd.MM.yyyy'),
+        foerderziel_1: log.foerderziel,
+        foerderziel: log.foerderziel,
+        forderziel: log.foerderziel,
+        assistenzinhalt_1: log.assistenzinhalt,
+        assistenzinhalt: log.assistenzinhalt,
+        anmerkungreflexion_1: log.anmerkungReflexion,
+        anmerkungreflexion: log.anmerkungReflexion,
+        anmerkungenreflexion: log.anmerkungReflexion,
+        startTime_1: log.startTime,
+        endTime_1: log.endTime,
+        zeitvb_1: `${log.startTime} - ${log.endTime}`,
+        zeitvb: `${log.startTime} - ${log.endTime}`,
+        zeitinmin_1: String(log.timeWithCustomerMinutes),
+        zeitinmin: String(log.timeWithCustomerMinutes),
+        anabfhart_von_1: log.anabfhart_from,
+        anabfhart_von: log.anabfhart_from,
+        anabfhart_bis_1: log.anabfhart_too,
+        anabfhart_bis: log.anabfhart_too,
+        anabfhart_from_1: log.anabfhart_from,
+        anabfhart_too_1: log.anabfhart_too,
+        traveltime_1: String(log.traveltime),
+        km_1: String(log.km),
+        anab_zeit_1: String(log.traveltime),
+        anab_km_1: String(log.km),
+        customer_anabfhart_from_1: log.customer_anabfhart_from,
+        customer_anabfhart_too_1: log.customer_anabfhart_too,
+        coustomer_traveltime_1: String(log.coustomer_traveltime),
+        couistomer_km_1: String(log.couistomer_km),
+        kdanabfhart_von_1: log.customer_anabfhart_from,
+        kdanabfhart_von: log.customer_anabfhart_from,
+        kdanabfhart_bis_1: log.customer_anabfhart_too,
+        kdanabfhart_bis: log.customer_anabfhart_too,
+        kdanab_zeit_1: String(log.coustomer_traveltime),
+        kdanab_zeit: String(log.coustomer_traveltime),
+        kdanab_km_1: String(log.couistomer_km),
+        kdanab_km: String(log.couistomer_km),
+      };
 
       try {
-        // @ts-ignore
-        if (typeof form.updateFieldAppearances === 'function') {
-          // @ts-ignore
-          form.updateFieldAppearances();
-        }
-      } catch (e) {}
+        const existingPdfBytes = await fetch(pdfTemplate.pdfBase64).then((res) => res.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(existingPdfBytes, { ignoreEncryption: true });
+        const form = pdfDoc.getForm();
 
-      pdfTemplate.fieldMappings.forEach(m => {
-        const value = dataMap[m.dataSource] || '';
-        const fieldName = m.placeholder.replace('{{', '').replace('}}', '');
         try {
-          const field = form.getTextField(fieldName);
-          field.setText(value);
-        } catch (e) {
-          const pages = pdfDoc.getPages();
-          let handled = false;
-          pages.forEach(page => {
-            const annots = page.node.Annots();
-            if (annots) {
-              annots.asArray().forEach(ref => {
-                const annot = pdfDoc.context.lookup(ref);
-                if (annot instanceof PDFDict) {
-                  const title = annot.get(PDFName.of('T'));
-                  const contents = annot.get(PDFName.of('Contents'));
-                  let name = '';
-                  if (title instanceof PDFString || title instanceof PDFHexString) name = title.decodeText();
-                  if ((!name || name === 'ramboo') && (contents instanceof PDFString || contents instanceof PDFHexString)) name = contents.decodeText();
-
-                  const cleanName = name.replace('{{', '').replace('}}', '');
-                  if (name === fieldName || cleanName === fieldName) {
-                    annot.set(PDFName.of('Contents'), PDFString.of(value));
-                    handled = true;
-                  }
-                }
-              });
-            }
-          });
-
-          if (!handled) {
-            try {
-              const allFields = form.getFields();
-              const match = allFields.find(f => f.getName().toLowerCase().includes(fieldName.toLowerCase()));
-              if (match && 'setText' in match) {
-                (match as any).setText(value);
-              }
-            } catch (inner) {}
+          // @ts-ignore
+          if (typeof form.updateFieldAppearances === 'function') {
+            // @ts-ignore
+            form.updateFieldAppearances();
           }
-        }
-      });
+        } catch (e) {}
 
-      exportEntries.forEach(({ day, log }, idx) => {
-        const rowIdx = idx + 1;
+        pdfTemplate.fieldMappings.forEach((m) => {
+          const value = resolveDataValue(m.dataSource, dataMap) ?? resolveDataValue(m.placeholder, dataMap) ?? '';
+          setPdfFieldValue(pdfDoc, m.placeholder, value, form);
+        });
+
         const rowData: Record<string, string> = {
-          [`date_${rowIdx}`]: format(day, 'dd.MM.yyyy'),
-          [`goal_${rowIdx}`]: log?.foerderziel || '',
-          [`content_${rowIdx}`]: log?.assistenzinhalt || '',
-          [`start_${rowIdx}`]: log?.startTime || '',
-          [`end_${rowIdx}`]: log?.endTime || '',
-          [`duration_${rowIdx}`]: String(log?.timeWithCustomerMinutes || 0),
+          date_1: format(day, 'dd.MM.yyyy'),
+          goal_1: log.foerderziel,
+          content_1: log.assistenzinhalt,
+          start_1: log.startTime,
+          end_1: log.endTime,
+          duration_1: String(log.timeWithCustomerMinutes || 0),
         };
 
         Object.entries(rowData).forEach(([fieldName, val]) => {
-          try {
-            const field = form.getTextField(fieldName);
-            field.setText(val);
-          } catch (e) {}
+          setPdfFieldValue(pdfDoc, fieldName, val, form);
         });
-      });
 
-      form.flatten();
+        // Fallback autofill: if template still has placeholder-like field names, resolve by token.
+        const autoTokens = new Set<string>();
+        form.getFields().forEach((f) => autoTokens.add(f.getName()));
+        pdfDoc.getPages().forEach((page) => {
+          const annots = page.node.Annots();
+          if (!annots) return;
+          annots.asArray().forEach((ref) => {
+            const annot = pdfDoc.context.lookup(ref);
+            if (!(annot instanceof PDFDict)) return;
+            const title = annot.get(PDFName.of('T'));
+            const contents = annot.get(PDFName.of('Contents'));
+            if (title instanceof PDFString || title instanceof PDFHexString) autoTokens.add(title.decodeText());
+            if (contents instanceof PDFString || contents instanceof PDFHexString) autoTokens.add(contents.decodeText());
+          });
+        });
 
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `${customer.kunde}_${month}_${scope}.pdf`;
-      link.click();
-    } catch (err) {
-      console.error('PDF-LIB error:', err);
-      alert('Failed to generate PDF from base template.');
+        autoTokens.forEach((token) => {
+          const value = resolveDataValue(token, dataMap);
+          if (value !== undefined) {
+            setPdfFieldValue(pdfDoc, token, value, form);
+          }
+        });
+
+        form.flatten();
+
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        const fileDate = format(day, 'yyyy-MM-dd');
+        const objectUrl = URL.createObjectURL(blob);
+        link.href = objectUrl;
+        link.download = `${customer.kunde}_${fileDate}.pdf`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      } catch (err) {
+        console.error('PDF-LIB error:', err);
+        alert(`Failed to generate PDF for ${format(day, 'dd.MM.yyyy')}.`);
+      }
     }
   };
 
