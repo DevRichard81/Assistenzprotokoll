@@ -721,11 +721,26 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
   );
 }
 
-function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Date, log?: DailyLog, isSelected: boolean, onToggle: () => void, onSave: (d: Partial<DailyLog>) => void, defaults?: Customer }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [data, setData] = useState<Partial<DailyLog>>(log || {});
+function LogEditModal({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  initialData, 
+  dateStr,
+  defaults 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onSave: (d: Partial<DailyLog>) => void, 
+  initialData: Partial<DailyLog>,
+  dateStr: string,
+  defaults?: Customer
+}) {
+  const [data, setData] = useState<Partial<DailyLog>>(initialData);
 
-  useEffect(() => { setData(log || {}); }, [log]);
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData, isOpen]);
 
   const calculateDuration = (start: string, end: string) => {
     if (!start || !end) return;
@@ -734,32 +749,195 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
     const startTotal = startH * 60 + startM;
     const endTotal = endH * 60 + endM;
     let diff = endTotal - startTotal;
-    if (diff < 0) diff += 24 * 60; // Handle overnight if applicable, though unlikely here
+    if (diff < 0) diff += 24 * 60;
     setData(prev => ({ ...prev, timeWithCustomerMinutes: diff }));
   };
 
   const handleApplyDefaults = () => {
     const defaultStart = '08:00';
     const defaultEnd = '16:00';
-    setData({
+    const newData = {
       ...data,
       startTime: defaultStart,
       endTime: defaultEnd,
-      foerderziel: '',
-      assistenzinhalt: '',
-      anmerkungReflexion: '',
       anabfhart_from: defaults?.anfahrtFrom || '',
       anabfhart_too: defaults?.abfahrtTo || '',
       traveltime: defaults?.driveTimeMinutes || 0,
       km: defaults?.km || 0,
-      customer_anabfhart_from: '',
-      customer_anabfhart_too: '',
-      coustomer_traveltime: 0,
-      couistomer_km: 0,
-    });
+    };
+    setData(newData);
     calculateDuration(defaultStart, defaultEnd);
-    setIsEditing(true);
   };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+          <h3 className="text-xl font-bold text-gray-900">Edit Log Entry - {dateStr}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <RefreshCw size={24} className="rotate-45" /> {/* Using RefreshCw rotated as close icon if X not available or just text */}
+            <span className="sr-only">Close</span>
+            <span className="text-2xl">&times;</span>
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <div className="flex justify-end">
+            <button 
+              onClick={handleApplyDefaults}
+              className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-md hover:bg-blue-100 border border-blue-200"
+            >
+              Apply Customer Defaults
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h4 className="font-semibold text-blue-700 border-b pb-1">Work Content</h4>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Förderziel</label>
+                <textarea 
+                  className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                  rows={3}
+                  placeholder="Förderziel" 
+                  value={data.foerderziel || ''} 
+                  onChange={e => setData({...data, foerderziel: e.target.value})} 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assistenzinhalt</label>
+                <textarea 
+                  className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                  rows={6}
+                  placeholder="Assistenzinhalt" 
+                  value={data.assistenzinhalt || ''} 
+                  onChange={e => setData({...data, assistenzinhalt: e.target.value})} 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Anmerkung/Reflexion</label>
+                <textarea 
+                  className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                  rows={3}
+                  placeholder="Anmerkung/Reflexion" 
+                  value={data.anmerkungReflexion || ''} 
+                  onChange={e => setData({...data, anmerkungReflexion: e.target.value})} 
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="font-semibold text-blue-700 border-b pb-1">Time & Duration</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start</label>
+                    <input 
+                      type="time" 
+                      className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                      value={data.startTime || ''} 
+                      onChange={e => {
+                        const newStart = e.target.value;
+                        setData({...data, startTime: newStart});
+                        if (data.endTime) calculateDuration(newStart, data.endTime);
+                      }} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End</label>
+                    <input 
+                      type="time" 
+                      className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                      value={data.endTime || ''} 
+                      onChange={e => {
+                        const newEnd = e.target.value;
+                        setData({...data, endTime: newEnd});
+                        if (data.startTime) calculateDuration(data.startTime, newEnd);
+                      }} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                    <input 
+                      type="number" 
+                      className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                      value={data.timeWithCustomerMinutes || 0} 
+                      onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})} 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-semibold text-blue-700 border-b pb-1">Assistant Travel (An/Abfahrt)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.anabfhart_from || ''} onChange={e => setData({...data, anabfhart_from: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.anabfhart_too || ''} onChange={e => setData({...data, anabfhart_too: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (min)</label>
+                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.traveltime || 0} onChange={e => setData({...data, traveltime: Number(e.target.value)})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
+                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.km || 0} onChange={e => setData({...data, km: Number(e.target.value)})} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-semibold text-blue-700 border-b pb-1">Customer Travel (An/Abfahrt Kunde)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.customer_anabfhart_from || ''} onChange={e => setData({...data, customer_anabfhart_from: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.customer_anabfhart_too || ''} onChange={e => setData({...data, customer_anabfhart_too: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (min)</label>
+                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.coustomer_traveltime || 0} onChange={e => setData({...data, coustomer_traveltime: Number(e.target.value)})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
+                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.couistomer_km || 0} onChange={e => setData({...data, couistomer_km: Number(e.target.value)})} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t flex justify-end gap-3 bg-gray-50">
+          <button 
+            onClick={onClose} 
+            className="px-6 py-2 border rounded-lg text-gray-700 hover:bg-gray-100 font-medium"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => { onSave(data); onClose(); }} 
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
+          >
+            <Save size={18} /> Save Entry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Date, log?: DailyLog, isSelected: boolean, onToggle: () => void, onSave: (d: Partial<DailyLog>) => void, defaults?: Customer }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
     <tr className={`border-b hover:bg-gray-50 ${!log ? 'text-gray-400' : 'text-gray-900'}`}>
@@ -772,82 +950,34 @@ function LogRow({ day, log, isSelected, onToggle, onSave, defaults }: { day: Dat
         />
       </td>
       <td className="p-3 font-medium text-gray-900">{format(day, 'dd.MM (EEE)')}</td>
-      {isEditing ? (
-        <>
-          <td className="p-1 space-y-1">
-            <input type="text" placeholder="Förderziel" className="border rounded p-1 w-full bg-white text-gray-900" value={data.foerderziel || ''} onChange={e => setData({...data, foerderziel: e.target.value})} />
-            <input type="text" placeholder="Anmerkung/Reflexion" className="border rounded p-1 w-full bg-white text-gray-900" value={data.anmerkungReflexion || ''} onChange={e => setData({...data, anmerkungReflexion: e.target.value})} />
-          </td>
-          <td className="p-1"><textarea placeholder="Assistenzinhalt" className="border rounded p-1 w-full bg-white text-gray-900" rows={2} value={data.assistenzinhalt || ''} onChange={e => setData({...data, assistenzinhalt: e.target.value})} /></td>
-          <td className="p-1 space-y-1">
-            <input 
-              type="time" 
-              className="border rounded p-1 w-full bg-white text-gray-900" 
-              value={data.startTime || ''} 
-              onChange={e => {
-                const newStart = e.target.value;
-                setData({...data, startTime: newStart});
-                if (data.endTime) calculateDuration(newStart, data.endTime);
-              }} 
-            />
-            <input 
-              type="time" 
-              className="border rounded p-1 w-full bg-white text-gray-900" 
-              value={data.endTime || ''} 
-              onChange={e => {
-                const newEnd = e.target.value;
-                setData({...data, endTime: newEnd});
-                if (data.startTime) calculateDuration(data.startTime, newEnd);
-              }} 
-            />
-            <input type="number" placeholder="min" className="border rounded p-1 w-full bg-white text-gray-900" value={data.timeWithCustomerMinutes || 0} onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})} />
-          </td>
-          <td className="p-1 space-y-1">
-            <input type="text" placeholder="Von" className="border rounded p-1 w-full text-xs bg-white text-gray-900" value={data.anabfhart_from || ''} onChange={e => setData({...data, anabfhart_from: e.target.value})} />
-            <input type="text" placeholder="Zu" className="border rounded p-1 w-full text-xs bg-white text-gray-900" value={data.anabfhart_too || ''} onChange={e => setData({...data, anabfhart_too: e.target.value})} />
-            <div className="flex gap-1">
-              <input type="number" placeholder="min" className="border rounded p-1 w-1/2 text-xs bg-white text-gray-900" value={data.traveltime || 0} onChange={e => setData({...data, traveltime: Number(e.target.value)})} />
-              <input type="number" placeholder="km" className="border rounded p-1 w-1/2 text-xs bg-white text-gray-900" value={data.km || 0} onChange={e => setData({...data, km: Number(e.target.value)})} />
-            </div>
-          </td>
-          <td className="p-1 space-y-1">
-            <input type="text" placeholder="Kd Von" className="border rounded p-1 w-full text-xs bg-white text-gray-900" value={data.customer_anabfhart_from || ''} onChange={e => setData({...data, customer_anabfhart_from: e.target.value})} />
-            <input type="text" placeholder="Kd Zu" className="border rounded p-1 w-full text-xs bg-white text-gray-900" value={data.customer_anabfhart_too || ''} onChange={e => setData({...data, customer_anabfhart_too: e.target.value})} />
-            <div className="flex gap-1">
-              <input type="number" placeholder="min" className="border rounded p-1 w-1/2 text-xs bg-white text-gray-900" value={data.coustomer_traveltime || 0} onChange={e => setData({...data, coustomer_traveltime: Number(e.target.value)})} />
-              <input type="number" placeholder="km" className="border rounded p-1 w-1/2 text-xs bg-white text-gray-900" value={data.couistomer_km || 0} onChange={e => setData({...data, couistomer_km: Number(e.target.value)})} />
-            </div>
-          </td>
-          <td className="p-3 text-right flex justify-end gap-1">
-            <button onClick={() => { onSave(data); setIsEditing(false); }} className="text-green-600 p-1"><Save size={18} /></button>
-            <button onClick={() => setIsEditing(false)} className="text-gray-400 p-1">X</button>
-          </td>
-        </>
-      ) : (
-        <>
-          <td className="p-3 text-gray-900 text-xs">
-            <div className="font-bold">{log?.foerderziel || '-'}</div>
-            <div className="text-gray-500 italic">{log?.anmerkungReflexion || '-'}</div>
-          </td>
-          <td className="p-3 text-gray-900 text-xs whitespace-pre-wrap">{log?.assistenzinhalt || '-'}</td>
-          <td className="p-3 text-gray-900 text-xs">
-            <div>{log ? `${log.startTime} - ${log.endTime}` : '-'}</div>
-            <div className="font-bold">{log?.timeWithCustomerMinutes || 0}m</div>
-          </td>
-          <td className="p-3 text-gray-900 text-xs">
-            <div>{log?.anabfhart_from} → {log?.anabfhart_too}</div>
-            <div>{log?.traveltime || 0}m / {log?.km || 0}km</div>
-          </td>
-          <td className="p-3 text-gray-900 text-xs">
-            <div>{log?.customer_anabfhart_from} → {log?.customer_anabfhart_too}</div>
-            <div>{log?.coustomer_traveltime || 0}m / {log?.couistomer_km || 0}km</div>
-          </td>
-          <td className="p-3 text-right">
-             <button onClick={() => setIsEditing(true)} className="text-blue-600 text-sm hover:underline mr-2">Edit</button>
-             {!log && <button onClick={handleApplyDefaults} className="text-gray-500 text-sm hover:underline">Use Defaults</button>}
-          </td>
-        </>
-      )}
+      <td className="p-3 text-gray-900 text-xs">
+        <div className="font-bold">{log?.foerderziel || '-'}</div>
+        <div className="text-gray-500 italic">{log?.anmerkungReflexion || '-'}</div>
+      </td>
+      <td className="p-3 text-gray-900 text-xs whitespace-pre-wrap line-clamp-2 hover:line-clamp-none transition-all cursor-help">{log?.assistenzinhalt || '-'}</td>
+      <td className="p-3 text-gray-900 text-xs">
+        <div>{log ? `${log.startTime} - ${log.endTime}` : '-'}</div>
+        <div className="font-bold">{log?.timeWithCustomerMinutes || 0}m</div>
+      </td>
+      <td className="p-3 text-gray-900 text-xs">
+        <div>{log?.anabfhart_from} → {log?.anabfhart_too}</div>
+        <div>{log?.traveltime || 0}m / {log?.km || 0}km</div>
+      </td>
+      <td className="p-3 text-gray-900 text-xs">
+        <div>{log?.customer_anabfhart_from} → {log?.customer_anabfhart_too}</div>
+        <div>{log?.coustomer_traveltime || 0}m / {log?.couistomer_km || 0}km</div>
+      </td>
+      <td className="p-3 text-right">
+          <button onClick={() => setIsModalOpen(true)} className="text-blue-600 text-sm hover:underline mr-2">Edit</button>
+          <LogEditModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+            onSave={onSave} 
+            initialData={log || {}} 
+            dateStr={format(day, 'dd.MM.yyyy')}
+            defaults={defaults}
+          />
+      </td>
     </tr>
   );
 }
