@@ -232,6 +232,16 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
 
   const [selectedDayStrings, setSelectedDayStrings] = useState<string[]>([]);
 
+  const pdfTemplates = useLiveQuery(() => db.pdfTemplates.toArray()) || [];
+  const [selectedPdfTemplateId, setSelectedPdfTemplateId] = useState<number | undefined>(undefined);
+  const activePdfSetting = useLiveQuery(() => db.settings.get('activePdfTemplateId'));
+
+  useEffect(() => {
+    if (activePdfSetting && !selectedPdfTemplateId) {
+      setSelectedPdfTemplateId(activePdfSetting.value);
+    }
+  }, [activePdfSetting]);
+
   const logs = useLiveQuery(
     () => (customerId ? db.logs.where('customerId').equals(customerId).filter(l => l.date.startsWith(month)).toArray() : Promise.resolve([])) as Promise<DailyLog[]>,
     [customerId, month]
@@ -285,11 +295,17 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
   const generatePDF = async (scope: 'selected' | 'month' = 'selected') => {
     if (!customer || !logs) return;
 
-    const activePdfTemplateSetting = await db.settings.get('activePdfTemplateId');
-    const pdfTemplateId = activePdfTemplateSetting?.value;
-    const pdfTemplate = pdfTemplateId ? await db.pdfTemplates.get(pdfTemplateId) : null;
+    let pdfTemplate;
+    if (selectedPdfTemplateId) {
+      pdfTemplate = await db.pdfTemplates.get(selectedPdfTemplateId);
+    } else {
+      const activePdfTemplateSetting = await db.settings.get('activePdfTemplateId');
+      const pdfTemplateId = activePdfTemplateSetting?.value;
+      pdfTemplate = pdfTemplateId ? await db.pdfTemplates.get(pdfTemplateId) : null;
+    }
+
     if (!pdfTemplate) {
-      alert('Please select an active PDF template in Settings before exporting.');
+      alert('Please select an active PDF template before exporting.');
       return;
     }
 
@@ -449,8 +465,19 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       });
     };
 
-    // One day entry = one PDF file
-    for (const { day, log } of exportEntries) {
+    const entryGroups: typeof exportEntries[] = [];
+    if (pdfTemplate.type === 'double_entry') {
+      for (let i = 0; i < exportEntries.length; i += 2) {
+        entryGroups.push(exportEntries.slice(i, i + 2));
+      }
+    } else {
+      exportEntries.forEach((e) => entryGroups.push([e]));
+    }
+
+    // Process each group (one group = one PDF file)
+    for (const group of entryGroups) {
+      const firstEntry = group[0];
+      const { day, log } = firstEntry;
       if (!log) continue;
 
       const monthTotalGasCost = (monthTotalKm / 100) * fuelConsumption * fuelPrice;
@@ -471,45 +498,88 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
         total_work: `${monthTotalWorkMinutes} min`,
         total_drive: `${monthTotalDriveMinutes} min`,
         total_gas_cost: `${monthTotalGasCost.toFixed(2)} €`,
-        date_1: format(day, 'dd.MM.yyyy'),
-        datum: format(day, 'dd.MM.yyyy'),
-        foerderziel_1: log.foerderziel,
-        foerderziel: log.foerderziel,
-        forderziel: log.foerderziel,
-        assistenzinhalt_1: log.assistenzinhalt,
-        assistenzinhalt: log.assistenzinhalt,
-        anmerkungreflexion_1: log.anmerkungReflexion,
-        anmerkungreflexion: log.anmerkungReflexion,
-        anmerkungenreflexion: log.anmerkungReflexion,
-        startTime_1: log.startTime,
-        endTime_1: log.endTime,
-        zeitvb_1: `${log.startTime} - ${log.endTime}`,
-        zeitvb: `${log.startTime} - ${log.endTime}`,
-        zeitinmin_1: String(log.timeWithCustomerMinutes),
-        zeitinmin: String(log.timeWithCustomerMinutes),
-        anabfhart_von_1: log.anabfhart_from,
-        anabfhart_von: log.anabfhart_from,
-        anabfhart_bis_1: log.anabfhart_too,
-        anabfhart_bis: log.anabfhart_too,
-        anabfhart_from_1: log.anabfhart_from,
-        anabfhart_too_1: log.anabfhart_too,
-        traveltime_1: String(log.traveltime),
-        km_1: String(log.km),
-        anab_zeit_1: String(log.traveltime),
-        anab_km_1: String(log.km),
-        customer_anabfhart_from_1: log.customer_anabfhart_from,
-        customer_anabfhart_too_1: log.customer_anabfhart_too,
-        coustomer_traveltime_1: String(log.coustomer_traveltime),
-        couistomer_km_1: String(log.couistomer_km),
-        kdanabfhart_von_1: log.customer_anabfhart_from,
-        kdanabfhart_von: log.customer_anabfhart_from,
-        kdanabfhart_bis_1: log.customer_anabfhart_too,
-        kdanabfhart_bis: log.customer_anabfhart_too,
-        kdanab_zeit_1: String(log.coustomer_traveltime),
-        kdanab_zeit: String(log.coustomer_traveltime),
-        kdanab_km_1: String(log.couistomer_km),
-        kdanab_km: String(log.couistomer_km),
       };
+
+      // Add data for each entry in the group
+      group.forEach((entry, idx) => {
+        const sfx = `_${idx + 1}`;
+        const l = entry.log!;
+        const d = entry.day;
+
+        const entryData = {
+          [`date${sfx}`]: format(d, 'dd.MM.yyyy'),
+          [`datum${sfx}`]: format(d, 'dd.MM.yyyy'),
+          [`foerderziel${sfx}`]: l.foerderziel,
+          [`forderziel${sfx}`]: l.foerderziel,
+          [`assistenzinhalt${sfx}`]: l.assistenzinhalt,
+          [`anmerkungreflexion${sfx}`]: l.anmerkungReflexion,
+          [`anmerkungenreflexion${sfx}`]: l.anmerkungReflexion,
+          [`startTime${sfx}`]: l.startTime,
+          [`endTime${sfx}`]: l.endTime,
+          [`zeitvb${sfx}`]: `${l.startTime} - ${l.endTime}`,
+          [`zeitinmin${sfx}`]: String(l.timeWithCustomerMinutes),
+          [`anabfhart_von${sfx}`]: l.anabfhart_from,
+          [`anabfhart_von`]: l.anabfhart_from,
+          [`anabfhart_bis${sfx}`]: l.anabfhart_too,
+          [`anabfhart_bis`]: l.anabfhart_too,
+          [`anabfhart_from${sfx}`]: l.anabfhart_from,
+          [`anabfhart_too${sfx}`]: l.anabfhart_too,
+          [`traveltime${sfx}`]: String(l.traveltime),
+          [`km${sfx}`]: String(l.km),
+          [`anab_zeit${sfx}`]: String(l.traveltime),
+          [`anab_km${sfx}`]: String(l.km),
+          [`customer_anabfhart_from${sfx}`]: l.customer_anabfhart_from,
+          [`customer_anabfhart_too${sfx}`]: l.customer_anabfhart_too,
+          [`coustomer_traveltime${sfx}`]: String(l.coustomer_traveltime),
+          [`couistomer_km${sfx}`]: String(l.couistomer_km),
+          [`kdanabfhart_von${sfx}`]: l.customer_anabfhart_from,
+          [`kdanabfhart_von`]: l.customer_anabfhart_from,
+          [`kdanabfhart_bis${sfx}`]: l.customer_anabfhart_too,
+          [`kdanabfhart_bis`]: l.customer_anabfhart_too,
+          [`kdanab_zeit${sfx}`]: String(l.coustomer_traveltime),
+          [`kdanab_zeit`]: String(l.coustomer_traveltime),
+          [`kdanab_km${sfx}`]: String(l.couistomer_km),
+          [`kdanab_km`]: String(l.couistomer_km),
+        };
+
+        Object.assign(dataMap, entryData);
+
+        if (idx === 0) {
+          // Backward compatibility for single-entry templates
+          dataMap['date_1'] = entryData.date_1;
+          dataMap['datum'] = entryData.datum_1;
+          dataMap['foerderziel_1'] = entryData.foerderziel_1;
+          dataMap['foerderziel'] = entryData.foerderziel_1;
+          dataMap['forderziel'] = entryData.foerderziel_1;
+          dataMap['assistenzinhalt_1'] = entryData.assistenzinhalt_1;
+          dataMap['assistenzinhalt'] = entryData.assistenzinhalt_1;
+          dataMap['anmerkungreflexion_1'] = entryData.anmerkungreflexion_1;
+          dataMap['anmerkungreflexion'] = entryData.anmerkungreflexion_1;
+          dataMap['anmerkungenreflexion'] = entryData.anmerkungreflexion_1;
+          dataMap['startTime_1'] = entryData.startTime_1;
+          dataMap['endTime_1'] = entryData.endTime_1;
+          dataMap['zeitvb_1'] = entryData.zeitvb_1;
+          dataMap['zeitvb'] = entryData.zeitvb_1;
+          dataMap['zeitinmin_1'] = entryData.zeitinmin_1;
+          dataMap['zeitinmin'] = entryData.zeitinmin_1;
+          dataMap['anabfhart_von_1'] = entryData.anabfhart_von_1;
+          dataMap['anabfhart_bis_1'] = entryData.anabfhart_bis_1;
+          dataMap['anabfhart_from_1'] = entryData.anabfhart_from_1;
+          dataMap['anabfhart_too_1'] = entryData.anabfhart_too_1;
+          dataMap['traveltime_1'] = entryData.traveltime_1;
+          dataMap['km_1'] = entryData.km_1;
+          dataMap['anab_zeit_1'] = entryData.anab_zeit_1;
+          dataMap['anab_km_1'] = entryData.anab_km_1;
+          dataMap['customer_anabfhart_from_1'] = entryData.customer_anabfhart_from_1;
+          dataMap['customer_anabfhart_too_1'] = entryData.customer_anabfhart_too_1;
+          dataMap['coustomer_traveltime_1'] = entryData.coustomer_traveltime_1;
+          dataMap['couistomer_km_1'] = entryData.couistomer_km_1;
+          dataMap['kdanabfhart_von_1'] = entryData.kdanabfhart_von_1;
+          dataMap['kdanabfhart_bis_1'] = entryData.kdanabfhart_bis_1;
+          dataMap['kdanab_zeit_1'] = entryData.kdanab_zeit_1;
+          dataMap['kdanab_km_1'] = entryData.kdanab_km_1;
+        }
+      });
 
       try {
         const existingPdfBytes = await fetch(pdfTemplate.pdfBase64).then((res) => res.arrayBuffer());
@@ -602,7 +672,9 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
         const link = document.createElement('a');
-        const fileDate = format(day, 'yyyy-MM-dd');
+        const fileDate = group.length > 1 
+          ? `${format(group[0].day, 'yyyy-MM-dd')}_to_${format(group[group.length - 1].day, 'yyyy-MM-dd')}`
+          : format(group[0].day, 'yyyy-MM-dd');
         const objectUrl = URL.createObjectURL(blob);
         link.href = objectUrl;
         link.download = `${customer.kunde}_${fileDate}.pdf`;
@@ -610,7 +682,10 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
         setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       } catch (err) {
         console.error('PDF-LIB error:', err);
-        alert(`Failed to generate PDF for ${format(day, 'dd.MM.yyyy')}.`);
+        const errorDate = group.length > 1 
+          ? `${format(group[0].day, 'dd.MM.yyyy')} - ${format(group[group.length - 1].day, 'dd.MM.yyyy')}`
+          : format(group[0].day, 'dd.MM.yyyy');
+        alert(`Failed to generate PDF for ${errorDate}.`);
       }
     }
   };
@@ -663,23 +738,39 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
            <h3 className="font-bold">Protocol for {customer?.kunde} ({month})</h3>
-           <div className="flex gap-2">
-             <button 
-               onClick={() => setSelectedDayStrings(days.map(d => format(d, 'yyyy-MM-dd')))}
-               className="text-xs text-blue-600 hover:underline"
+           <div className="flex gap-2 items-center">
+             <div className="flex gap-2 mr-4">
+               <button 
+                 onClick={() => setSelectedDayStrings(days.map(d => format(d, 'yyyy-MM-dd')))}
+                 className="text-xs text-blue-600 hover:underline"
+               >
+                 Select All
+               </button>
+               <button 
+                 onClick={() => setSelectedDayStrings([])}
+                 className="text-xs text-gray-500 hover:underline"
+               >
+                 Clear
+               </button>
+             </div>
+             
+             <select 
+               className="border rounded px-2 py-1.5 bg-white text-sm text-gray-900 focus:border-blue-500 outline-none"
+               value={selectedPdfTemplateId || ''}
+               onChange={(e) => setSelectedPdfTemplateId(e.target.value ? Number(e.target.value) : undefined)}
              >
-               Select All
-             </button>
-             <button 
-               onClick={() => setSelectedDayStrings([])}
-               className="text-xs text-gray-500 hover:underline"
-             >
-               Clear
-             </button>
-              <button onClick={() => generatePDF('selected')} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2">
+               <option value="">Select PDF Template...</option>
+               {pdfTemplates.map(t => (
+                 <option key={t.id} value={t.id}>
+                   {t.name} ({t.type === 'double_entry' ? '2 Entries' : '1 Entry'})
+                 </option>
+               ))}
+             </select>
+
+              <button onClick={() => generatePDF('selected')} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 ml-2 shadow-sm transition">
                 <FileText size={18} /> Export Selected ({selectedDayStrings.length})
               </button>
-              <button onClick={() => generatePDF('month')} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700">
+              <button onClick={() => generatePDF('month')} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700 shadow-sm transition">
                 <FileText size={18} /> Export Month ({monthLogCount})
              </button>
            </div>
@@ -1397,7 +1488,7 @@ function SettingsView() {
               >
                 <option value="">Select a template...</option>
                 {pdfTemplates.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>{t.name} ({t.type === 'double_entry' ? '2 Entries' : '1 Entry'})</option>
                 ))}
               </select>
             </div>
@@ -1471,7 +1562,8 @@ function PDFTemplatesView() {
           name: file.name,
           pdfBase64: base64,
           fieldMappings: [],
-          tableY: 100
+          tableY: 100,
+          type: 'single_entry'
         });
         setEditingId(newId as number);
       }
@@ -1833,13 +1925,23 @@ function PDFTemplatesView() {
       <div className="grid grid-cols-1 gap-6">
         {templates.map(t => (
           <div key={t.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <input 
-                type="text" 
-                className="text-xl font-bold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none text-gray-900"
-                value={t.name}
-                onChange={(e) => db.pdfTemplates.update(t.id!, { name: e.target.value })}
-              />
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex flex-col">
+                <input 
+                  type="text" 
+                  className="text-xl font-bold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none text-gray-900"
+                  value={t.name}
+                  onChange={(e) => db.pdfTemplates.update(t.id!, { name: e.target.value })}
+                />
+                <select
+                  className="mt-1 text-sm text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 w-fit focus:border-blue-500 outline-none"
+                  value={t.type || 'single_entry'}
+                  onChange={(e) => db.pdfTemplates.update(t.id!, { type: e.target.value as any })}
+                >
+                  <option value="single_entry">1 Entry per PDF</option>
+                  <option value="double_entry">2 Entries per PDF</option>
+                </select>
+              </div>
               <div className="flex gap-2">
                 <button 
                   onClick={() => debugScanFields(t.id!)}

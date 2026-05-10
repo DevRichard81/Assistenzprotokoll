@@ -45,6 +45,7 @@ export interface ChangeLog {
 export interface Setting {
   key: string;
   value: any;
+  selectedPDFId?: number; // ID of the active PDF for export
 }
 
 export interface PDFTemplate {
@@ -58,6 +59,7 @@ export interface PDFTemplate {
   detectedFields?: string[]; // Field names found during scan
   tableY: number; // Where to start the daily logs table
   tableSettings?: any;
+  type: 'single_entry' | 'double_entry'; // Specifies the type of PDF
 }
 
 const db = new Dexie('TanyaFillOutDB') as Dexie & {
