@@ -335,6 +335,7 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
 
     const normalizeFieldName = (value: string) => value.replaceAll('{{', '').replaceAll('}}', '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
+    // Add mappings for _2 fields in aliasToDataKey
     const aliasToDataKey: Record<string, string> = {
       betreuer: 'assistent',
       betreuerin: 'assistent',
@@ -361,6 +362,26 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       kdanabfahrtbis: 'kdanabfhart_bis_1',
       kdanabzeit: 'kdanab_zeit_1',
       kdanabkm: 'kdanab_km_1',
+      datum_2: 'date_2',
+      forderziel_2: 'foerderziel_2',
+      foerderziel_2: 'foerderziel_2',
+      assistenzinhalt_2: 'assistenzinhalt_2',
+      anmerkungreflexion_2: 'anmerkungreflexion_2',
+      zeitvb_2: 'zeitvb_2',
+      zeitvonbis_2: 'zeitvb_2',
+      zeitinmin_2: 'zeitinmin_2',
+      anabfhartvon_2: 'anabfhart_von_2',
+      anabfhartbis_2: 'anabfhart_bis_2',
+      anabfahrtvon_2: 'anabfhart_von_2',
+      anabfahrtbis_2: 'anabfhart_bis_2',
+      anabzeit_2: 'anab_zeit_2',
+      anabkm_2: 'anab_km_2',
+      kdanabfhartvon_2: 'kdanabfhart_von_2',
+      kdanabfhartbis_2: 'kdanabfhart_bis_2',
+      kdanabfahrtvon_2: 'kdanabfhart_von_2',
+      kdanabfahrtbis_2: 'kdanabfhart_bis_2',
+      kdanabzeit_2: 'kdanab_zeit_2',
+      kdanabkm_2: 'kdanab_km_2',
     };
 
     const resolveDataValue = (token: string, dataMap: Record<string, string>, allowAlias = true) => {
@@ -532,14 +553,6 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
           [`customer_anabfhart_too${sfx}`]: l.customer_anabfhart_too,
           [`coustomer_traveltime${sfx}`]: String(l.coustomer_traveltime),
           [`couistomer_km${sfx}`]: String(l.couistomer_km),
-          [`kdanabfhart_von${sfx}`]: l.customer_anabfhart_from,
-          [`kdanabfhart_von`]: l.customer_anabfhart_from,
-          [`kdanabfhart_bis${sfx}`]: l.customer_anabfhart_too,
-          [`kdanabfhart_bis`]: l.customer_anabfhart_too,
-          [`kdanab_zeit${sfx}`]: String(l.coustomer_traveltime),
-          [`kdanab_zeit`]: String(l.coustomer_traveltime),
-          [`kdanab_km${sfx}`]: String(l.couistomer_km),
-          [`kdanab_km`]: String(l.couistomer_km),
         };
 
         Object.assign(dataMap, entryData);
@@ -578,6 +591,29 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
           dataMap['kdanabfhart_bis_1'] = entryData.kdanabfhart_bis_1;
           dataMap['kdanab_zeit_1'] = entryData.kdanab_zeit_1;
           dataMap['kdanab_km_1'] = entryData.kdanab_km_1;
+        } else if (idx === 1) {
+          dataMap['date_2'] = entryData.date_2;
+          dataMap['datum_2'] = entryData.datum_2;
+          dataMap['foerderziel_2'] = entryData.foerderziel_2;
+          dataMap['assistenzinhalt_2'] = entryData.assistenzinhalt_2;
+          dataMap['anmerkungreflexion_2'] = entryData.anmerkungreflexion_2;
+          dataMap['zeitvb_2'] = entryData.zeitvb_2;
+          dataMap['zeitvonbis_2'] = entryData.zeitvonbis_2;
+          dataMap['zeitinmin_2'] = entryData.zeitinmin_2;
+          dataMap['anabfhartvon_2'] = entryData.anabfhartvon_2;
+          dataMap['anabfhartbis_2'] = entryData.anabfhartbis_2;
+          dataMap['anabfahrtvon_2'] = entryData.anabfhartvon_2;
+          dataMap['anabfahrtbis_2'] = entryData.anabfhartbis_2;
+          dataMap['anab_zeit_2'] = entryData.anab_zeit_2;
+          dataMap['anab_km_2'] = entryData.anab_km_2;
+          dataMap['customer_anabfhart_from_2'] = entryData.customer_anabfhart_from_2;
+          dataMap['customer_anabfhart_too_2'] = entryData.customer_anabfhart_too_2;
+          dataMap['coustomer_traveltime_2'] = entryData.coustomer_traveltime_2;
+          dataMap['couistomer_km_2'] = entryData.couistomer_km_2;
+          dataMap['kdanabfhart_von_2'] = entryData.kdanabfhart_von_2;
+          dataMap['kdanabfhart_bis_2'] = entryData.kdanabfhart_bis_2;
+          dataMap['kdanab_zeit_2'] = entryData.kdanab_zeit_2;
+          dataMap['kdanab_km_2'] = entryData.kdanab_km_2;
         }
       });
 
@@ -1297,11 +1333,11 @@ function StatsView({ month }: { month: string }) {
                     </td>
                     <td className="p-4 text-right">
                       <p className="font-bold text-gray-900">{s.totalMinutes} m</p>
-                      <p className="text-xs text-gray-500">{formatTime(s.totalMinutes)}</p>
+                      <p className="text-xs text-gray-500 font-bold">{formatTime(s.totalMinutes)}</p>
                     </td>
                     <td className="p-4 text-right">
                       <p className="font-bold text-orange-600">{s.totalDriveTime} m</p>
-                      <p className="text-xs text-gray-500">{formatTime(s.totalDriveTime)}</p>
+                      <p className="text-xs text-gray-500 font-bold">{formatTime(s.totalDriveTime)}</p>
                     </td>
                     <td className="p-4 text-right">
                       <p className="font-bold text-blue-600">{s.totalKm} km</p>
@@ -2074,6 +2110,22 @@ function PDFTemplatesView() {
                               <option value="customer_anabfhart_too_1">Cust. Travel To (Row 1)</option>
                               <option value="coustomer_traveltime_1">Cust. Travel Time (Row 1)</option>
                               <option value="couistomer_km_1">Cust. Travel KM (Row 1)</option>
+                            </optgroup>
+                            <optgroup label="Daily Logs (Row 2 Examples)">
+                              <option value="date_2">Date (Row 2)</option>
+                              <option value="foerderziel_2">Goal (Row 2)</option>
+                              <option value="assistenzinhalt_2">Content (Row 2)</option>
+                              <option value="anmerkungreflexion_2">Reflection (Row 2)</option>
+                              <option value="zeitvb_2">Time Von-Bis (Row 2)</option>
+                              <option value="zeitinmin_2">Time in Min (Row 2)</option>
+                              <option value="anabfhart_from_2">Travel From (Row 2)</option>
+                              <option value="anabfhart_too_2">Travel To (Row 2)</option>
+                              <option value="traveltime_2">Travel Time (Row 2)</option>
+                              <option value="km_2">Travel KM (Row 2)</option>
+                              <option value="customer_anabfhart_from_2">Cust. Travel From (Row 2)</option>
+                              <option value="customer_anabfhart_too_2">Cust. Travel To (Row 2)</option>
+                              <option value="coustomer_traveltime_2">Cust. Travel Time (Row 2)</option>
+                              <option value="couistomer_km_2">Cust. Travel KM (Row 2)</option>
                             </optgroup>
                           </select>
                         </div>
