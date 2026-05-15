@@ -103,7 +103,6 @@ export default function App() {
         <nav className={`flex-1 ${isMobileLayout ? 'flex gap-2 overflow-x-auto px-3 pb-3' : 'px-4 space-y-2'}`}>
           <NavItem compact={isMobileLayout} icon={<Calendar />} label="Daily Logs" active={activeView === 'logs'} onClick={() => setActiveView('logs')} />
           <NavItem compact={isMobileLayout} icon={<User />} label="Customers" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
-          <NavItem compact={isMobileLayout} icon={<FileText />} label="Templates" active={activeView === 'pdfTemplates'} onClick={() => setActiveView('pdfTemplates')} />
           <NavItem compact={isMobileLayout} icon={<BarChart />} label="Statistics" active={activeView === 'stats'} onClick={() => setActiveView('stats')} />
           <NavItem compact={isMobileLayout} icon={<History />} label="Change Log" active={activeView === 'history'} onClick={() => setActiveView('history')} />
           <NavItem compact={isMobileLayout} icon={<Settings />} label="Settings" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
@@ -165,7 +164,6 @@ export default function App() {
         {activeView === 'stats' && <StatsView month={selectedMonth} />}
         {activeView === 'history' && <HistoryView />}
         {activeView === 'settings' && <SettingsView />}
-        {activeView === 'pdfTemplates' && <PDFTemplatesView />}
       </main>
     </div>
   );
@@ -1417,13 +1415,10 @@ function StatsView({ month }: { month: string }) {
 }
 
 function SettingsView() {
+  const [activeTab, setActiveTab] = useState<'general' | 'templates' | 'backup'>('general');
   const gasolineSetting = useLiveQuery(() => db.settings.get('gasoline'));
-  const activePdfTemplateId = useLiveQuery(() => db.settings.get('activePdfTemplateId'));
-  const pdfTemplates = useLiveQuery(() => db.pdfTemplates.toArray()) || [];
-
   const [consumption, setConsumption] = useState('');
   const [price, setPrice] = useState('');
-  const [selectedPdfTemplateId, setSelectedPdfTemplateId] = useState<number | undefined>(undefined);
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1431,16 +1426,10 @@ function SettingsView() {
       setConsumption(String(gasolineSetting.value?.consumption ?? ''));
       setPrice(String(gasolineSetting.value?.price ?? ''));
     }
-    if (activePdfTemplateId) setSelectedPdfTemplateId(activePdfTemplateId.value);
-  }, [gasolineSetting, activePdfTemplateId]);
+  }, [gasolineSetting]);
 
   const handleSave = async () => {
     await db.settings.put({ key: 'gasoline', value: { consumption: Number(consumption), price: Number(price) } });
-    if (selectedPdfTemplateId) {
-      await db.settings.put({ key: 'activePdfTemplateId', value: Number(selectedPdfTemplateId) });
-    } else {
-      await db.settings.delete('activePdfTemplateId');
-    }
     alert('Settings saved!');
   };
 
@@ -1517,78 +1506,106 @@ function SettingsView() {
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-6">
-      <div className="bg-white p-8 rounded-xl border shadow-sm">
-        <h3 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-          <Settings size={24} className="text-gray-400" />
-          General Configuration
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Consumption (Liters / 100km)</label>
-            <input 
-              type="number" 
-              step="0.1"
-              className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
-              value={consumption} 
-              onChange={e => setConsumption(e.target.value)} 
-              placeholder="e.g. 6.5"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Price (Price per Liter)</label>
-            <input 
-              type="number" 
-              step="0.01"
-              className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
-              value={price} 
-              onChange={e => setPrice(e.target.value)} 
-              placeholder="e.g. 1.75"
-            />
-          </div>
-          <button 
-            onClick={handleSave} 
-            className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors mt-4"
-          >
-            <Save size={20} /> Save Configuration
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          General
+        </button>
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'templates' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          PDF Templates
+        </button>
+        <button
+          onClick={() => setActiveTab('backup')}
+          className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'backup' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Backup & Restore
+        </button>
       </div>
 
-      {/* Backup & Restore */}
-      <div className="bg-white p-8 rounded-xl border shadow-sm">
-        <h3 className="text-xl font-bold mb-2 text-gray-900 flex items-center gap-2">
-          <Download size={24} className="text-gray-400" />
-          Backup &amp; Restore
-        </h3>
-        <p className="text-sm text-gray-500 mb-6">
-          Save a full backup of all data (customers, daily logs, PDF templates, settings, change log) to a JSON file, or restore from a previous backup.
-        </p>
-
-        <div className="space-y-3">
-          <button
-            onClick={handleBackup}
-            className="w-full bg-green-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
-          >
-            <Download size={20} /> Download Backup (.json)
-          </button>
-
-          <label className="w-full bg-orange-500 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-orange-600 transition-colors cursor-pointer">
-            <RefreshCw size={20} /> Restore from Backup
-            <input
-              type="file"
-              accept=".json"
-              className="hidden"
-              onChange={handleRestore}
-            />
-          </label>
-
-          {restoreStatus && (
-            <div className={`text-sm p-3 rounded-lg ${restoreStatus.startsWith('✅') ? 'bg-green-50 text-green-800 border border-green-200' : restoreStatus === 'Restoring...' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-              {restoreStatus}
+      <div className="animate-in fade-in duration-300">
+        {activeTab === 'general' && (
+          <div className="max-w-md mx-auto bg-white p-8 rounded-xl border shadow-sm">
+            <h3 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+              <Settings size={24} className="text-gray-400" />
+              General Configuration
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Consumption (Liters / 100km)</label>
+                <input 
+                  type="number" 
+                  step="0.1"
+                  className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  value={consumption} 
+                  onChange={e => setConsumption(e.target.value)} 
+                  placeholder="e.g. 6.5"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Price (Price per Liter)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  value={price} 
+                  onChange={e => setPrice(e.target.value)} 
+                  placeholder="e.g. 1.75"
+                />
+              </div>
+              <button 
+                onClick={handleSave} 
+                className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors mt-4"
+              >
+                <Save size={20} /> Save Configuration
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {activeTab === 'templates' && <PDFTemplatesView />}
+
+        {activeTab === 'backup' && (
+          <div className="max-w-md mx-auto bg-white p-8 rounded-xl border shadow-sm">
+            <h3 className="text-xl font-bold mb-2 text-gray-900 flex items-center gap-2">
+              <Download size={24} className="text-gray-400" />
+              Backup &amp; Restore
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Save a full backup of all data (customers, daily logs, PDF templates, settings, change log) to a JSON file, or restore from a previous backup.
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleBackup}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
+              >
+                <Download size={20} /> Download Backup (.json)
+              </button>
+
+              <label className="w-full bg-orange-500 text-white px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-orange-600 transition-colors cursor-pointer">
+                <RefreshCw size={20} /> Restore from Backup
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleRestore}
+                />
+              </label>
+
+              {restoreStatus && (
+                <div className={`text-sm p-3 rounded-lg ${restoreStatus.startsWith('✅') ? 'bg-green-50 text-green-800 border border-green-200' : restoreStatus === 'Restoring...' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                  {restoreStatus}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
