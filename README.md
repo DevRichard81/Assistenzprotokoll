@@ -1,6 +1,6 @@
-﻿# TanyaFillOut
+﻿# Assistenzprotokoll
 
-TanyaFillOut is a Vite + React application for managing assistance customers, daily logs, PDF templates, statistics, backups, and offline browser data.
+Assistenzprotokoll is a Vite + React application for managing assistance customers, daily logs, PDF templates, statistics, backups, and offline browser data.
 
 ## Progressive Web App support
 
