@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { PDFDocument, PDFDict, PDFName, PDFString, PDFHexString, PDFBool } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFName, PDFString, PDFHexString, PDFBool, PDFTextField } from 'pdf-lib';
 import { db, type Customer, type DailyLog } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Dialog from './components/Dialog';
 import PWAManager from './components/PWAManager';
+import PDFTemplatesView from './components/PDFTemplatesView';
 
 // --- Types ---
 type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings' | 'pdfTemplates';
@@ -464,6 +465,10 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
         try {
           const exact = allFields.find((f) => f.getName() === candidate);
           if (exact && 'setText' in exact) {
+            if (exact instanceof PDFTextField) {
+              exact.enableMultiline();
+              exact.setFontSize(10);
+            }
             (exact as any).setText(value);
             fieldHandled = true;
             break;
@@ -474,6 +479,10 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
           const normalizedCandidate = normalizeFieldName(candidate);
           const normalized = allFields.find((f) => normalizeFieldName(f.getName()) === normalizedCandidate);
           if (normalized && 'setText' in normalized) {
+            if (normalized instanceof PDFTextField) {
+              normalized.enableMultiline();
+              normalized.setFontSize(10);
+            }
             (normalized as any).setText(value);
             fieldHandled = true;
             break;
@@ -1701,6 +1710,8 @@ function PDFTemplatesView() {
           const fieldName = m.placeholder.replace('{{', '').replace('}}', '');
           try {
             const field = form.getTextField(fieldName);
+            field.enableMultiline();
+            field.setFontSize(10);
             field.setText(sampleData[m.dataSource] || `[${m.dataSource}]`);
           } catch (e) {
             // Fallback for non-standard fields (like annotations we found)
@@ -1765,6 +1776,8 @@ function PDFTemplatesView() {
         Object.entries(testData).forEach(([key, val]) => {
           try { 
             const field = form.getTextField(key);
+            field.enableMultiline();
+            field.setFontSize(10);
             field.setText(val);
           } catch(e) {
              // Fallback for annotation-based fields in test
