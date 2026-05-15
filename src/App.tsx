@@ -7,6 +7,7 @@ import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settin
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Dialog from './components/Dialog';
+import PWAManager from './components/PWAManager';
 
 // --- Types ---
 type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings' | 'pdfTemplates';
@@ -93,6 +94,7 @@ export default function App() {
   const isMobileLayout = viewMode === 'mobile';
   return (
     <div className={`min-h-screen bg-gray-50 ${isMobileLayout ? 'flex flex-col' : 'flex'}`}>
+      <PWAManager />
       {/* Sidebar */}
       <aside className={`${isMobileLayout ? 'w-full border-b' : 'w-64 border-r'} bg-white flex flex-col`}>
         <div className="p-6">
@@ -1543,22 +1545,6 @@ function SettingsView() {
               onChange={e => setPrice(e.target.value)} 
               placeholder="e.g. 1.75"
             />
-          </div>
-          <div className="space-y-4 pt-4 border-t">
-            <h4 className="font-semibold text-gray-900">PDF Generation</h4>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Active PDF Template</label>
-              <select
-                className="w-full border rounded p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                value={selectedPdfTemplateId || ''}
-                onChange={(e) => setSelectedPdfTemplateId(e.target.value ? Number(e.target.value) : undefined)}
-              >
-                <option value="">Select a template...</option>
-                {pdfTemplates.map(t => (
-                  <option key={t.id} value={t.id}>{t.name} ({t.type === 'double_entry' ? '2 Entries' : '1 Entry'})</option>
-                ))}
-              </select>
-            </div>
           </div>
           <button 
             onClick={handleSave} 
