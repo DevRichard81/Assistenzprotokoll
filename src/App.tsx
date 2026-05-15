@@ -6,9 +6,11 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { Plus, Trash2, Save, FileText, BarChart, History, User, Calendar, Settings, Download, Search, RefreshCw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import Dialog from './components/Dialog';
 
 // --- Types ---
 type View = 'customers' | 'logs' | 'stats' | 'history' | 'settings' | 'pdfTemplates';
+type ViewMode = 'auto' | 'desktop' | 'mobile';
 
 // --- Helper for Audit Logging ---
 async function logChange(entityType: 'customer' | 'log', entityId: number, action: 'create' | 'update' | 'delete', oldValue?: any, newValue?: any) {
@@ -58,8 +60,21 @@ export default function App() {
   const [activeView, setActiveView] = useState<View>('logs');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      return (localStorage.getItem('uiMode') as ViewMode) || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
 
   useEffect(() => {
+    try {
+      localStorage.setItem('uiMode', viewMode);
+    } catch {
+      // ignore storage failures
+    }
+
     // Check if initial settings exist
     const checkSettings = async () => {
       try {
@@ -72,34 +87,35 @@ export default function App() {
       }
     };
     checkSettings();
-  }, []);
+  }, [viewMode]);
 
   const customers = useLiveQuery(() => db.customers.toArray());
+  const isMobileLayout = viewMode === 'mobile';
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className={`min-h-screen bg-gray-50 ${isMobileLayout ? 'flex flex-col' : 'flex'}`}>
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r flex flex-col">
+      <aside className={`${isMobileLayout ? 'w-full border-b' : 'w-64 border-r'} bg-white flex flex-col`}>
         <div className="p-6">
           <h1 className="text-xl font-bold text-blue-600">Assistenz Manager</h1>
         </div>
-        <nav className="flex-1 px-4 space-y-2">
-          <NavItem icon={<Calendar />} label="Daily Logs" active={activeView === 'logs'} onClick={() => setActiveView('logs')} />
-          <NavItem icon={<User />} label="Customers" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
-          <NavItem icon={<FileText />} label="Templates" active={activeView === 'pdfTemplates'} onClick={() => setActiveView('pdfTemplates')} />
-          <NavItem icon={<BarChart />} label="Statistics" active={activeView === 'stats'} onClick={() => setActiveView('stats')} />
-          <NavItem icon={<History />} label="Change Log" active={activeView === 'history'} onClick={() => setActiveView('history')} />
-          <NavItem icon={<Settings />} label="Settings" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
+        <nav className={`flex-1 ${isMobileLayout ? 'flex gap-2 overflow-x-auto px-3 pb-3' : 'px-4 space-y-2'}`}>
+          <NavItem compact={isMobileLayout} icon={<Calendar />} label="Daily Logs" active={activeView === 'logs'} onClick={() => setActiveView('logs')} />
+          <NavItem compact={isMobileLayout} icon={<User />} label="Customers" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
+          <NavItem compact={isMobileLayout} icon={<FileText />} label="Templates" active={activeView === 'pdfTemplates'} onClick={() => setActiveView('pdfTemplates')} />
+          <NavItem compact={isMobileLayout} icon={<BarChart />} label="Statistics" active={activeView === 'stats'} onClick={() => setActiveView('stats')} />
+          <NavItem compact={isMobileLayout} icon={<History />} label="Change Log" active={activeView === 'history'} onClick={() => setActiveView('history')} />
+          <NavItem compact={isMobileLayout} icon={<Settings />} label="Settings" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
         </nav>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto p-8">
-        <header className="mb-8 flex justify-between items-center">
+      <main className={`flex-1 overflow-auto ${isMobileLayout ? 'p-4' : 'p-8'}`}>
+        <header className={`mb-8 flex ${isMobileLayout ? 'flex-col gap-4' : 'justify-between items-center'}`}>
           <div>
             <h2 className="text-2xl font-bold text-gray-800 capitalize">{activeView.replace('-', ' ')}</h2>
             <p className="text-gray-500">Manage your assistance protocols and customer data.</p>
           </div>
-          <div className="flex gap-4">
+          <div className={`flex gap-4 ${isMobileLayout ? 'flex-col' : 'items-center'}`}>
              {activeView === 'logs' && (
                 <select 
                   className="border rounded px-3 py-2 bg-white text-gray-900" 
@@ -116,6 +132,29 @@ export default function App() {
                  onChange={setSelectedMonth}
                />
              )}
+              <div className="inline-flex items-center gap-2 rounded-lg bg-gray-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('auto')}
+                  className={`rounded-md px-3 py-1 text-sm transition ${viewMode === 'auto' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                  Auto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('desktop')}
+                  className={`rounded-md px-3 py-1 text-sm transition ${viewMode === 'desktop' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                  Desktop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('mobile')}
+                  className={`rounded-md px-3 py-1 text-sm transition ${viewMode === 'mobile' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                  Mobile
+                </button>
+              </div>
           </div>
         </header>
 
@@ -130,11 +169,11 @@ export default function App() {
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) {
+function NavItem({ icon, label, active, onClick, compact }: { icon: any, label: string, active: boolean, onClick: () => void, compact?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+      className={`${compact ? 'min-w-max flex-shrink-0 px-3 py-2' : 'w-full px-4 py-2'} flex items-center gap-3 rounded-lg transition-colors ${
         active ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
       }`}
     >
@@ -772,11 +811,11 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
       )}
 
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+        <div className="p-4 border-b flex flex-col gap-3 md:flex-row md:justify-between md:items-center bg-gray-50">
            <h3 className="font-bold">Protocol for {customer?.kunde} ({month})</h3>
-           <div className="flex gap-2 items-center">
-             <div className="flex gap-2 mr-4">
-               <button 
+            <div className="flex flex-wrap gap-2 items-center md:justify-end">
+              <div className="flex gap-2 mr-0 md:mr-4">
+               <button
                  onClick={() => setSelectedDayStrings(days.map(d => format(d, 'yyyy-MM-dd')))}
                  className="text-xs text-blue-600 hover:underline"
                >
@@ -811,7 +850,8 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
              </button>
            </div>
         </div>
-        <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto">
+        <table className="min-w-[800px] w-full text-left border-collapse">
           <thead className="bg-gray-50 text-sm uppercase text-gray-500">
             <tr>
               <th className="p-3 border-b w-10"></th>
@@ -843,6 +883,7 @@ function LogsView({ customerId, month }: { customerId: number | null, month: str
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -899,153 +940,142 @@ function LogEditModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
-          <h3 className="text-xl font-bold text-gray-900">Edit Log Entry - {dateStr}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <RefreshCw size={24} className="rotate-45" /> {/* Using RefreshCw rotated as close icon if X not available or just text */}
-            <span className="sr-only">Close</span>
-            <span className="text-2xl">&times;</span>
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Edit Log Entry - ${dateStr}`}>
+      <div className="space-y-6">
+        <div className="flex justify-end">
+          <button
+            onClick={handleApplyDefaults}
+            className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-md hover:bg-blue-100 border border-blue-200"
+          >
+            Apply Customer Defaults
           </button>
         </div>
-        
-        <div className="p-6 space-y-6">
-          <div className="flex justify-end">
-            <button 
-              onClick={handleApplyDefaults}
-              className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-md hover:bg-blue-100 border border-blue-200"
-            >
-              Apply Customer Defaults
-            </button>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <h4 className="font-semibold text-blue-700 border-b pb-1">Work Content</h4>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Förderziel</label>
+              <textarea
+                className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Förderziel"
+                value={data.foerderziel || ''}
+                onChange={e => setData({...data, foerderziel: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assistenzinhalt</label>
+              <textarea
+                className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
+                rows={6}
+                placeholder="Assistenzinhalt"
+                value={data.assistenzinhalt || ''}
+                onChange={e => setData({...data, assistenzinhalt: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Anmerkung/Reflexion</label>
+              <textarea
+                className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Anmerkung/Reflexion"
+                value={data.anmerkungReflexion || ''}
+                onChange={e => setData({...data, anmerkungReflexion: e.target.value})}
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-6">
             <div className="space-y-4">
-              <h4 className="font-semibold text-blue-700 border-b pb-1">Work Content</h4>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Förderziel</label>
-                <textarea 
-                  className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
-                  rows={3}
-                  placeholder="Förderziel" 
-                  value={data.foerderziel || ''} 
-                  onChange={e => setData({...data, foerderziel: e.target.value})} 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assistenzinhalt</label>
-                <textarea 
-                  className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
-                  rows={6}
-                  placeholder="Assistenzinhalt" 
-                  value={data.assistenzinhalt || ''} 
-                  onChange={e => setData({...data, assistenzinhalt: e.target.value})} 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Anmerkung/Reflexion</label>
-                <textarea 
-                  className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
-                  rows={3}
-                  placeholder="Anmerkung/Reflexion" 
-                  value={data.anmerkungReflexion || ''} 
-                  onChange={e => setData({...data, anmerkungReflexion: e.target.value})} 
-                />
+              <h4 className="font-semibold text-blue-700 border-b pb-1">Time & Duration</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start</label>
+                  <input
+                    type="time"
+                    className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
+                    value={data.startTime || ''}
+                    onChange={e => {
+                      const newStart = e.target.value;
+                      setData({...data, startTime: newStart});
+                      if (data.endTime) calculateDuration(newStart, data.endTime);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End</label>
+                  <input
+                    type="time"
+                    className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
+                    value={data.endTime || ''}
+                    onChange={e => {
+                      const newEnd = e.target.value;
+                      setData({...data, endTime: newEnd});
+                      if (data.startTime) calculateDuration(data.startTime, newEnd);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
+                    value={data.timeWithCustomerMinutes || 0}
+                    onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <h4 className="font-semibold text-blue-700 border-b pb-1">Time & Duration</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start</label>
-                    <input 
-                      type="time" 
-                      className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
-                      value={data.startTime || ''} 
-                      onChange={e => {
-                        const newStart = e.target.value;
-                        setData({...data, startTime: newStart});
-                        if (data.endTime) calculateDuration(newStart, data.endTime);
-                      }} 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">End</label>
-                    <input 
-                      type="time" 
-                      className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
-                      value={data.endTime || ''} 
-                      onChange={e => {
-                        const newEnd = e.target.value;
-                        setData({...data, endTime: newEnd});
-                        if (data.startTime) calculateDuration(data.startTime, newEnd);
-                      }} 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
-                    <input 
-                      type="number" 
-                      className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" 
-                      value={data.timeWithCustomerMinutes || 0} 
-                      onChange={e => setData({...data, timeWithCustomerMinutes: Number(e.target.value)})} 
-                    />
-                  </div>
+            <div className="space-y-4">
+              <h4 className="font-semibold text-blue-700 border-b pb-1">Assistant Travel (An/Abfahrt)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                  <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.anabfhart_from || ''} onChange={e => setData({...data, anabfhart_from: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                  <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.anabfhart_too || ''} onChange={e => setData({...data, anabfhart_too: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time (min)</label>
+                  <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.traveltime || 0} onChange={e => setData({...data, traveltime: Number(e.target.value)})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
+                  <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.km || 0} onChange={e => setData({...data, km: Number(e.target.value)})} />
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-4">
-                <h4 className="font-semibold text-blue-700 border-b pb-1">Assistant Travel (An/Abfahrt)</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.anabfhart_from || ''} onChange={e => setData({...data, anabfhart_from: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.anabfhart_too || ''} onChange={e => setData({...data, anabfhart_too: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (min)</label>
-                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.traveltime || 0} onChange={e => setData({...data, traveltime: Number(e.target.value)})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
-                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.km || 0} onChange={e => setData({...data, km: Number(e.target.value)})} />
-                  </div>
+            <div className="space-y-4">
+              <h4 className="font-semibold text-blue-700 border-b pb-1">Customer Travel (An/Abfahrt Kunde)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                  <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.customer_anabfhart_from || ''} onChange={e => setData({...data, customer_anabfhart_from: e.target.value})} />
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-semibold text-blue-700 border-b pb-1">Customer Travel (An/Abfahrt Kunde)</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.customer_anabfhart_from || ''} onChange={e => setData({...data, customer_anabfhart_from: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-                    <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.customer_anabfhart_too || ''} onChange={e => setData({...data, customer_anabfhart_too: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (min)</label>
-                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.coustomer_traveltime || 0} onChange={e => setData({...data, coustomer_traveltime: Number(e.target.value)})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
-                    <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.couistomer_km || 0} onChange={e => setData({...data, couistomer_km: Number(e.target.value)})} />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                  <input type="text" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.customer_anabfhart_too || ''} onChange={e => setData({...data, customer_anabfhart_too: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time (min)</label>
+                  <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.coustomer_traveltime || 0} onChange={e => setData({...data, coustomer_traveltime: Number(e.target.value)})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
+                  <input type="number" className="w-full border rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500" value={data.couistomer_km || 0} onChange={e => setData({...data, couistomer_km: Number(e.target.value)})} />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6 border-t flex justify-end gap-3 bg-gray-50">
-          <button 
+        <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+          <button
             onClick={onClose} 
             className="px-6 py-2 border rounded-lg text-gray-700 hover:bg-gray-100 font-medium"
           >
@@ -1059,7 +1089,7 @@ function LogEditModal({
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -1459,7 +1489,8 @@ function SettingsView() {
       const backup = JSON.parse(text);
 
       if (!backup.version || !backup.customers || !backup.logs) {
-        throw new Error('Invalid backup file format.');
+        setRestoreStatus('❌ Restore failed: Invalid backup file format.');
+        return;
       }
 
       await db.transaction('rw', [db.customers, db.logs, db.settings, db.pdfTemplates, db.auditTrail], async () => {
