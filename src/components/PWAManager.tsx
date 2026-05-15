@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { Download, RefreshCw, X } from 'lucide-react';
+import { Download, RefreshCw, X, Share } from 'lucide-react';
 
 export default function PWAManager() {
   const {
@@ -18,14 +18,22 @@ export default function PWAManager() {
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
+  const [showIosPrompt, setShowIosPrompt] = useState(false);
 
   useEffect(() => {
+    // Detect if already installed/standalone
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    
+    // Detect iOS
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
+    if (isIos && !isStandalone) {
+      setShowIosPrompt(true);
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
       e.preventDefault();
-      // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
-      // Update UI to notify the user they can add to home screen
       setShowInstallButton(true);
     });
 
@@ -48,11 +56,33 @@ export default function PWAManager() {
   const close = () => {
     setOfflineReady(false);
     setNeedRefresh(false);
+    setShowIosPrompt(false);
   };
 
   return (
     <>
-      {/* Install Button - Fixed at bottom right */}
+      {/* iOS Manual Install Instructions */}
+      {showIosPrompt && (
+        <div className="fixed bottom-20 right-6 left-6 md:left-auto md:w-80 bg-blue-600 text-white p-5 rounded-2xl shadow-2xl z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500">
+          <button onClick={close} className="absolute top-2 right-2 p-1 hover:bg-blue-700 rounded-full transition-colors">
+            <X size={18} />
+          </button>
+          <div className="flex flex-col items-center text-center gap-3">
+            <div className="bg-white/20 p-3 rounded-full">
+              <Download size={32} />
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">App installieren</h4>
+              <p className="text-sm text-blue-100 mt-1">
+                Tippen Sie auf <Share size={18} className="inline mx-1" /> und dann auf <strong>"Zum Home-Bildschirm"</strong>, um die App offline zu nutzen.
+              </p>
+            </div>
+          </div>
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-blue-600 rotate-45"></div>
+        </div>
+      )}
+
+      {/* Install Button - Fixed at bottom right (Android/Chrome) */}
       {showInstallButton && (
         <button
           onClick={handleInstallClick}
