@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/Assistenzprotokoll/',
+  base: './',
   plugins: [
     react(),
     VitePWA({
@@ -17,8 +17,8 @@ export default defineConfig({
         background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/Assistenzprotokoll/',
-        scope: '/Assistenzprotokoll/',
+        start_url: './',
+        scope: './',
         lang: 'de',
         icons: [
           {
